@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"math/rand"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -182,11 +181,6 @@ func (bot *Persona) respondToNotification(ctx context.Context, ev *mastodon.Noti
 
 // respondToMention はメンションに反応する。
 func (bot *Persona) respondToMention(ctx context.Context, account mastodon.Account, status *mastodon.Status) (err error) {
-	r := regexp.MustCompile(`:.*:\z`)
-	name := account.DisplayName
-	if r.MatchString(name) {
-		name = name + " "
-	}
 	txt := textContent(status.Content)
 
 	if strings.Contains(txt, "フォロー解除") {

@@ -1,0 +1,9 @@
+MastoAppName: tankabot #「認証済みアプリ」にリストされるアプリ名
+
+NumConcurrentLangJobs: 4    # 言語解析ジョブの同時実行数の上限（多すぎるとメモリ使いすぎでアプリが落ちる。1〜10を指定可）
+
+Persona:   # botのアカウント情報
+    Name: mybot #任意。ログ出力に使われる。
+    Instance: https://example.com
+    Email: mybot@mymail.com
+    Password: ***************

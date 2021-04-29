@@ -1,0 +1,8 @@
+cmd/**/*.yml
+cmd/**/*.txt
+cmd/**/*.json
+cmd/test
+cmd/tankabot/tankabot
+cmd/tankabot/tankabotenv
+*.backup
+.DS_Store

@@ -26,7 +26,7 @@ type phrase struct {
 	canStart  bool // canStart は短歌の先頭句になりうるかどうか。
 }
 
-// findTanka は文字列の中に短歌（五七五七七）が含まれていればそれを返す。
+// extractTankas は文字列の中に短歌（五七五七七）が含まれていればそれを返す。
 func extractTankas(str string, jpl chan int) (tankas string) {
 	phrases := segmentByPhrase(str, jpl)
 
@@ -51,18 +51,17 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 
 	var p phrase
 	for _, n := range nodes {
-		if n.dependent && !n.divisible {
-			p.surface = p.surface + n.surface
-			p.moraCount = p.moraCount + n.moraCount
-		} else {
+		if n.divisible {
 			compP := p
 			phrases = append(phrases, compP)
 			p.surface = n.surface
 			p.moraCount = n.moraCount
-			p.canStart = true
-			if n.divisible {
-				p.canStart = false
+			if !n.dependent {
+				p.canStart = true
 			}
+		} else {
+			p.surface += n.surface
+			p.moraCount += n.moraCount
 		}
 	}
 	phrases = append(phrases, p)
@@ -93,7 +92,7 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.surface = props[0]
 			node.moraCount = moraCount(props[8])
 			node.dependent = strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾"
-			node.divisible = node.dependent && (props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞")
+			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞"
 			nodes = append(nodes, node)
 		}
 	}
@@ -110,7 +109,7 @@ func moraCount(word string) (count int) {
 	return
 }
 
-// scanForTanka はフレーズスライスの冒頭が短歌になっていればそれを返す。
+// detectTanka はフレーズスライスの冒頭が短歌になっていればそれを返す。
 func detectTanka(phrases []phrase) (tanka string) {
 	if !phrases[0].canStart {
 		return

@@ -4,7 +4,9 @@ import (
 	"context"
 	"log"
 	"math/rand"
+	"regexp"
 	"runtime"
+	"strings"
 	"time"
 
 	mastodon "github.com/hanage999/go-mastodon"
@@ -161,7 +163,10 @@ func (bot *Persona) respondToUpdate(ctx context.Context, ev *mastodon.UpdateEven
 func (bot *Persona) respondToNotification(ctx context.Context, ev *mastodon.NotificationEvent) (err error) {
 	switch ev.Notification.Type {
 	case "mention":
-		// TODO
+		if err = bot.respondToMention(ctx, ev.Notification.Account, ev.Notification.Status); err != nil {
+			log.Printf("info: %s がメンションに反応できませんでした：%s", bot.Name, err)
+			return
+		}
 	case "reblog":
 		// TODO
 	case "favourite":
@@ -172,6 +177,32 @@ func (bot *Persona) respondToNotification(ctx context.Context, ev *mastodon.Noti
 			return
 		}
 	}
+	return
+}
+
+// respondToMention はメンションに反応する。
+func (bot *Persona) respondToMention(ctx context.Context, account mastodon.Account, status *mastodon.Status) (err error) {
+	r := regexp.MustCompile(`:.*:\z`)
+	name := account.DisplayName
+	if r.MatchString(name) {
+		name = name + " "
+	}
+	txt := textContent(status.Content)
+
+	if strings.Contains(txt, "フォロー解除") {
+		rel, err := bot.relationWith(ctx, account.ID)
+		if err != nil {
+			log.Printf("info: %s が関係取得に失敗しました", bot.Name)
+			return err
+		}
+		if (*rel[0]).Following == true {
+			if err = bot.unfollow(ctx, account.ID); err != nil {
+				log.Printf("info: %s がアンフォローに失敗しました", bot.Name)
+				return err
+			}
+		}
+	}
+
 	return
 }
 
@@ -215,6 +246,21 @@ func (bot *Persona) follow(ctx context.Context, id mastodon.ID) (err error) {
 		if err != nil {
 			time.Sleep(bot.commonSettings.retryInterval)
 			log.Printf("info: %s がフォローできませんでした。リトライします：%s", bot.Name, err)
+			continue
+		}
+		break
+	}
+	return
+}
+
+// follow はアカウントをアンフォローする。失敗したらmaxRetryを上限に再試行する。
+func (bot *Persona) unfollow(ctx context.Context, id mastodon.ID) (err error) {
+	time.Sleep(time.Duration(rand.Intn(2000)+1000) * time.Millisecond)
+	for i := 0; i < bot.commonSettings.maxRetry; i++ {
+		_, err = bot.Client.AccountUnfollow(ctx, id)
+		if err != nil {
+			time.Sleep(bot.commonSettings.retryInterval)
+			log.Printf("info: %s がアンフォローできませんでした。リトライします：%s", bot.Name, err)
 			continue
 		}
 		break

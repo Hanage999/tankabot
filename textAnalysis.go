@@ -92,7 +92,7 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.surface = props[0]
 			node.moraCount = moraCount(props[8])
 			node.dependent = strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾"
-			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日"
+			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ"
 			nodes = append(nodes, node)
 		}
 	}

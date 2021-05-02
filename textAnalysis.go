@@ -159,9 +159,9 @@ func detectTanka(phrases []phrase) (tanka string) {
 		tanka += pr.delimiter + ku
 	}
 
-	//	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
-	//		return ""
-	//	}
+	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
+		return ""
+	}
 	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
 	tanka = rep.Replace(tanka)
 

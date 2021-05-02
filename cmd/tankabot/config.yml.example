@@ -1,5 +1,14 @@
 MastoAppName: tankabot #「認証済みアプリ」にリストされるアプリ名
 
+DBCredentials:  # MySQLデータベース接続のための資格情報（環境に応じて要変更）
+    Database: rss
+    Password: ****************
+    Server: localhost:3306
+    User: rss
+
+OpenCageKey: ***   # Geocodingサービス  (https://opencagedata.com/) のためのAPIキー（要登録）
+                    # LiveWithSunをtrueにした場合、opencagedataへのユーザ登録とAPIキー取得が必要です。
+
 NumConcurrentLangJobs: 4    # 言語解析ジョブの同時実行数の上限（多すぎるとメモリ使いすぎでアプリが落ちる。1〜10を指定可）
 
 Persona:   # botのアカウント情報
@@ -7,3 +16,15 @@ Persona:   # botのアカウント情報
     Instance: https://example.com
     Email: mybot@mymail.com
     Password: ***************
+    WakeHour: 6     # 起きる時刻（時）
+    WakeMin: 0      # 起きる時刻（分）
+    SleepHour: 22   # 寝る時刻（時）
+    SleepMin: 0     # 寝る時刻（分）
+    LivesWithSun: false  # trueで、太陽の出入りとともに寝起きする（要：opencagedataへのユーザ登録）
+    Latitude: 35.685175 # すみかの緯度
+    Longitude: 139.7528    # すみかの経度
+    ItemPool: 30    # プールしておくアイテムの最大数（これを超える分は、古いものから自動削除）
+    Hashtags:       # ランダムトゥートに含めるハッシュタグを一つずつ列挙（シャープ記号は不要）
+        - mybot
+        - news
+    RandomFrequency: 24  # 24時間あたり約何回ランダムトゥートさせるか。0でランダムトゥートしない。

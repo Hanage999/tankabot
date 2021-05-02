@@ -20,11 +20,12 @@ var (
 type commonSettings struct {
 	maxRetry      int
 	retryInterval time.Duration
+	openCageKey   string
 	langJobPool   chan int
 }
 
 // Initialize は、config.ymlに従ってbotとデータベース接続を初期化する。
-func Initialize() (bot Persona, err error) {
+func Initialize() (bot Persona, db DB, err error) {
 	// colog 設定
 	if version == "" {
 		colog.SetDefaultLevel(colog.LDebug)
@@ -48,12 +49,13 @@ func Initialize() (bot Persona, err error) {
 		_, err := exec.LookPath(cmd)
 		if err != nil {
 			log.Printf("alert: %s がインストールされていません！", cmd)
-			return bot, err
+			return bot, db, err
 		}
 	}
 
 	var appName string
 	var apps []*MastoApp
+	var cr map[string]string
 
 	// bot設定ファイル読み込み
 	conf := viper.New()
@@ -62,13 +64,14 @@ func Initialize() (bot Persona, err error) {
 	conf.SetConfigType("yaml")
 	if err := conf.ReadInConfig(); err != nil {
 		log.Printf("alert: 設定ファイルが読み込めませんでした")
-		return bot, err
+		return bot, db, err
 	}
 	appName = conf.GetString("MastoAppName")
 	conf.UnmarshalKey("Persona", &bot)
 	var cmn commonSettings
 	cmn.maxRetry = 5
 	cmn.retryInterval = time.Duration(5) * time.Second
+	cmn.openCageKey = conf.GetString("OpenCageKey")
 	nOfJobs := conf.GetInt("NumConcurrentLangJobs")
 	if nOfJobs <= 0 {
 		nOfJobs = 1
@@ -77,12 +80,13 @@ func Initialize() (bot Persona, err error) {
 	}
 	cmn.langJobPool = make(chan int, nOfJobs)
 	bot.commonSettings = &cmn
+	cr = conf.GetStringMapString("DBCredentials")
 
 	// マストドンアプリ設定ファイル読み込み
 	file, err := os.OpenFile("apps.yml", os.O_CREATE, 0666)
 	if err != nil {
 		log.Printf("alert: アプリ設定ファイルが作成できませんでした")
-		return bot, err
+		return bot, db, err
 	}
 	file.Close()
 	appConf := viper.New()
@@ -91,7 +95,7 @@ func Initialize() (bot Persona, err error) {
 	appConf.SetConfigType("yaml")
 	if err := appConf.ReadInConfig(); err != nil {
 		log.Printf("alert: アプリ設定ファイルが読み込めませんでした")
-		return bot, err
+		return bot, db, err
 	}
 	appConf.UnmarshalKey("MastoApps", &apps)
 
@@ -100,7 +104,7 @@ func Initialize() (bot Persona, err error) {
 	updatedApps, err := initMastoApps(apps, appName, bot.Instance)
 	if err != nil {
 		log.Printf("alert: %s のためのアプリを登録できませんでした", bot.Instance)
-		return bot, err
+		return bot, db, err
 	}
 	if len(updatedApps) > 0 {
 		apps = updatedApps
@@ -110,7 +114,7 @@ func Initialize() (bot Persona, err error) {
 		appConf.Set("MastoApps", apps)
 		if err := appConf.WriteConfig(); err != nil {
 			log.Printf("alert: アプリ設定ファイルが書き込めませんでした：%s", err)
-			return bot, err
+			return bot, db, err
 		}
 		log.Printf("info: 設定ファイルを更新しました")
 	}
@@ -118,14 +122,46 @@ func Initialize() (bot Persona, err error) {
 	// botをMastodonサーバに接続
 	if err := connectPersona(apps, &bot); err != nil {
 		log.Printf("alert: %s をMastodonサーバに接続できませんでした", bot.Name)
-		return bot, err
+		return bot, db, err
+	}
+
+	// データベースへの接続
+	db, err = newDB(cr)
+	if err != nil {
+		log.Printf("alert: データベースへの接続が確保できませんでした")
+		return bot, db, err
+	}
+
+	// botがまだデータベースに登録されていなかったら登録
+	if err = db.addNewBot(&bot); err != nil {
+		log.Printf("alert: データベースにbotが登録できませんでした")
+		return bot, db, err
+	}
+
+	// botのデータベース上のIDを取得
+	id, err := db.botID(&bot)
+	if err != nil {
+		log.Printf("alert: botのデータベース上のIDが取得できませんでした")
+		return bot, db, err
+	}
+	bot.DBID = id
+
+	// botの住処を登録
+	if bot.LivesWithSun {
+		log.Printf("info: %s の所在地を設定しています……", bot.Name)
+		time.Sleep(1001 * time.Millisecond)
+		bot.LocInfo, err = getLocDataFromCoordinates(bot.commonSettings.openCageKey, bot.Latitude, bot.Longitude)
+		if err != nil {
+			log.Printf("alert: %s の所在地情報の設定に失敗しました：%s", bot.Name, err)
+			return bot, db, err
+		}
 	}
 
 	return
 }
 
 // ActivateBot は、botを活動させる。
-func ActivateBot(bot Persona, p int) (err error) {
+func ActivateBot(bot *Persona, db DB, p int) (err error) {
 	// 全てをシャットダウンするタイムアウトの設定
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -139,7 +175,7 @@ func ActivateBot(bot Persona, p int) (err error) {
 	log.Printf("info: " + msg)
 
 	// 行ってらっしゃい
-	go bot.monitor(ctx)
+	go bot.spawn(ctx, db, true, false)
 
 	<-ctx.Done()
 	log.Printf("info: %d分経ったのでシャットダウンします", p)

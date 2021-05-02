@@ -21,9 +21,10 @@ type mecabNode struct {
 
 // phrase は文節とそのメタデータを含む構造体。
 type phrase struct {
-	surface   string
-	moraCount int
-	canStart  bool // canStart は短歌の先頭句になりうるかどうか。
+	surface     string
+	moraCount   int
+	canStart    bool // canStart は短歌の先頭句になりうるかどうか。
+	sentenceTop bool // sentenceTop は文頭かどうか。
 }
 
 // extractTankas は文字列の中に短歌（五七五七七）が含まれていればそれを返す。
@@ -58,6 +59,10 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 		if n.divisible {
 			compP := p
 			phrases = append(phrases, compP)
+			p.sentenceTop = false
+			if strings.HasSuffix(p.surface, "。") || strings.HasSuffix(p.surface, "EOS") {
+				p.sentenceTop = true
+			}
 			p.surface = n.surface
 			p.moraCount = n.moraCount
 			p.canStart = true
@@ -99,12 +104,12 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.dependent = strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
 			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
 			nodes = append(nodes, node)
-		} else if props[0] == "。" || props[0] == "「" || props[0] == "」" {
+		} else if props[0] == "。" || props[0] == "「" || props[0] == "」" || props[0] == "EOS" || props[0] == "(" || props[0] == ")" || props[0] == "（" || props[0] == "）" {
 			var node mecabNode
 			node.surface = props[0]
 			node.moraCount = 0
-			node.dependent = false
 			node.dependent = true
+			node.divisible = false
 			nodes = append(nodes, node)
 		} else if len(props) == 8 && props[2] == "数" {
 			var node mecabNode
@@ -139,43 +144,49 @@ func detectTanka(phrases []phrase) (tanka string) {
 		moraCount int
 	}
 
-	rule := []phraseRule{{"", 5}, {"　", 7}, {"　", 5}, {"\n", 7}, {"　", 7}}
+	rule := []phraseRule{{"", 5}, {" ", 7}, {" ", 5}, {"\n", 7}, {" ", 7}}
 	ku := ""
-	nospace := false
-	for _, pr := range rule {
-		ku, nospace, phrases = findKu(phrases, pr.moraCount)
+	sentenceTop := false
+	tempSTop := false
+	for i, pr := range rule {
+		ku, tempSTop, phrases = findKu(phrases, pr.moraCount)
+		if i == 0 {
+			sentenceTop = tempSTop
+		}
 		if ku == "" {
 			return ""
-		}
-		if nospace {
-			pr.delimiter = strings.Replace(pr.delimiter, "　", "", 1)
 		}
 		tanka += pr.delimiter + ku
 	}
 
-	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
-		return ""
-	}
+	//	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
+	//		return ""
+	//	}
 	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
 	tanka = rep.Replace(tanka)
 
-	tanka = strings.Trim(tanka, "。")
-	if strings.Contains(tanka, "。") {
-		return ""
+	if !(sentenceTop && (strings.HasSuffix(tanka, "。") || strings.HasSuffix(tanka, "EOS"))) {
+		tanka = strings.Trim(tanka, "。")
+		tanka = strings.Trim(tanka, "EOS")
+		if strings.Contains(tanka, "。") || strings.Contains(tanka, "EOS") {
+			return ""
+		}
 	}
+	rep = strings.NewReplacer("。", "", "EOS", "", "(", "", ")", "", "（", "", "）", "")
+	tanka = rep.Replace(tanka)
 
 	return
 }
 
 // findKu は文の先頭が指定の拍数ぴったりに収まればその部分文字列を返す。
-func findKu(phrases []phrase, mc int) (ku string, nospace bool, remainder []phrase) {
+func findKu(phrases []phrase, mc int) (ku string, sentenceTop bool, remainder []phrase) {
 	ic := len(phrases)
 	if ic == 0 {
 		return
 	}
 	morae := 0
 	var empty []phrase
-	nospace = !phrases[0].canStart
+	sentenceTop = phrases[0].sentenceTop
 	remainder = phrases
 	for morae < mc {
 		morae += remainder[0].moraCount

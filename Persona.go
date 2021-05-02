@@ -142,11 +142,11 @@ func (bot *Persona) respondToUpdate(ctx context.Context, ev *mastodon.UpdateEven
 	tankas := extractTankas(text, bot.langJobPool)
 
 	if tankas != "" {
-		msg := "@" + orig.Account.Acct + " 短歌を発見しました！\n" + tankas
+		msg := "@" + orig.Account.Acct + " 短歌を発見しました！\n\n" + tankas
 		st := ""
 		if orig.SpoilerText != "" {
 			st = "短歌を発見しました！"
-			msg = "@" + orig.Account.Acct + " \n" + tankas
+			msg = "@" + orig.Account.Acct + " \n\n" + tankas
 		}
 		toot := mastodon.Toot{Status: msg, SpoilerText: st, Visibility: orig.Visibility, InReplyToID: orig.ID}
 		if err = bot.post(ctx, toot); err != nil {

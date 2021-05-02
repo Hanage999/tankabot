@@ -56,8 +56,9 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 			phrases = append(phrases, compP)
 			p.surface = n.surface
 			p.moraCount = n.moraCount
-			if !n.dependent {
-				p.canStart = true
+			p.canStart = true
+			if n.dependent {
+				p.canStart = false
 			}
 		} else {
 			p.surface += n.surface
@@ -116,41 +117,46 @@ func detectTanka(phrases []phrase) (tanka string) {
 	}
 
 	type phraseRule struct {
-		moraCount int
 		delimiter string
+		moraCount int
 	}
 
-	rule := []phraseRule{{5, " "}, {7, " "}, {5, "\n"}, {7, " "}, {7, ""}}
+	rule := []phraseRule{{"", 5}, {"　", 7}, {"　", 5}, {"\n", 7}, {"　", 7}}
 	ku := ""
+	nospace := false
 	for _, pr := range rule {
-		ku, phrases = findKu(phrases, pr.moraCount)
+		ku, nospace, phrases = findKu(phrases, pr.moraCount)
 		if ku == "" {
 			return ""
 		}
-		tanka += ku + pr.delimiter
+		if nospace {
+			pr.delimiter = strings.Replace(pr.delimiter, "　", "", 1)
+		}
+		tanka += pr.delimiter + ku
 	}
 
 	return
 }
 
 // findKu は文の先頭が指定の拍数ぴったりに収まればその部分文字列を返す。
-func findKu(phrases []phrase, mc int) (ku string, remainder []phrase) {
+func findKu(phrases []phrase, mc int) (ku string, nospace bool, remainder []phrase) {
 	ic := len(phrases)
 	if ic == 0 {
 		return
 	}
 	morae := 0
 	var empty []phrase
+	nospace = !phrases[0].canStart
 	remainder = phrases
 	for morae < mc {
 		morae += remainder[0].moraCount
 		if morae > mc {
-			return "", empty
+			return "", false, empty
 		}
 		ku += remainder[0].surface
 		remainder = remainder[1:]
 		if len(remainder) == 0 && morae != mc {
-			return "", empty
+			return "", false, empty
 		}
 	}
 

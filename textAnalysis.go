@@ -28,12 +28,16 @@ type phrase struct {
 
 // extractTankas は文字列の中に短歌（五七五七七）が含まれていればそれを返す。
 func extractTankas(str string, jpl chan int) (tankas string) {
+	if str == "" || !isJap(str) {
+		return
+	}
+
 	phrases := segmentByPhrase(str, jpl)
 
 	for i := range phrases {
 		uta := detectTanka(phrases[i:])
 		if uta != "" {
-			tankas += uta + "\n\n"
+			tankas += "『" + uta + "』" + "\n\n"
 		}
 	}
 	tankas = strings.TrimSuffix(tankas, "\n\n")
@@ -92,8 +96,22 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			var node mecabNode
 			node.surface = props[0]
 			node.moraCount = moraCount(props[8])
-			node.dependent = strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾"
-			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ"
+			node.dependent = strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+			nodes = append(nodes, node)
+		} else if props[0] == "。" || props[0] == "「" || props[0] == "」" {
+			var node mecabNode
+			node.surface = props[0]
+			node.moraCount = 0
+			node.dependent = false
+			node.dependent = true
+			nodes = append(nodes, node)
+		} else if len(props) == 8 && props[2] == "数" {
+			var node mecabNode
+			node.surface = props[0]
+			node.moraCount = 8
+			node.dependent = false
+			node.divisible = true
 			nodes = append(nodes, node)
 		}
 	}
@@ -133,6 +151,17 @@ func detectTanka(phrases []phrase) (tanka string) {
 			pr.delimiter = strings.Replace(pr.delimiter, "　", "", 1)
 		}
 		tanka += pr.delimiter + ku
+	}
+
+	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
+		return ""
+	}
+	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
+	tanka = rep.Replace(tanka)
+
+	tanka = strings.Trim(tanka, "。")
+	if strings.Contains(tanka, "。") {
+		return ""
 	}
 
 	return

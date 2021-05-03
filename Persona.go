@@ -156,6 +156,9 @@ func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, act
 				if err := bot.post(newCtx, toot); err != nil {
 					log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
 				}
+				if err := bot.checkNotifications(newCtx); err != nil {
+					log.Printf("info: %s が通知を遡れませんでした。今回は諦めます……", bot.Name)
+				}
 			}()
 		}
 	} else {
@@ -174,6 +177,39 @@ func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, act
 func (bot *Persona) activities(ctx context.Context, db DB) {
 	go bot.monitor(ctx)
 	go bot.randomToot(ctx, db)
+}
+
+func (bot *Persona) checkNotifications(ctx context.Context) (err error) {
+	ns, err := bot.notifications(ctx)
+	if err != nil {
+		log.Printf("info: %s が通知一覧を取得できませんでした：%s", bot.Name, err)
+		return
+	}
+
+	for _, n := range ns {
+		switch n.Type {
+		case "mention":
+			if err = bot.respondToMention(ctx, n.Account, n.Status); err != nil {
+				log.Printf("info: %s がメンションに反応できませんでした：%s", bot.Name, err)
+				return
+			}
+		case "reblog":
+			// TODO
+		case "favourite":
+			// TODO
+		case "follow":
+			if err = bot.respondToFollow(ctx, n.Account); err != nil {
+				log.Printf("info: %s がフォローに反応できませんでした：%s", bot.Name, err)
+				return
+			}
+		}
+		if err = bot.dismissNotification(ctx, n.ID); err != nil {
+			log.Printf("info: %s が id:%s の通知を削除できませんでした：%s", bot.Name, string(n.ID), err)
+			return
+		}
+	}
+
+	return
 }
 
 // post は投稿する。失敗したらmaxRetryを上限に再試行する。
@@ -228,6 +264,33 @@ func (bot *Persona) relationWith(ctx context.Context, id mastodon.ID) (rel []*ma
 		if err != nil {
 			time.Sleep(bot.commonSettings.retryInterval)
 			log.Printf("info: %s と id:%s の関係が取得できませんでした。リトライします：%s", bot.Name, string(id), err)
+			continue
+		}
+		break
+	}
+	return
+}
+
+func (bot *Persona) notifications(ctx context.Context) (ns []*mastodon.Notification, err error) {
+	var pg mastodon.Pagination
+	for i := 0; i < bot.commonSettings.maxRetry; i++ {
+		ns, err = bot.Client.GetNotifications(ctx, &pg)
+		if err != nil {
+			time.Sleep(bot.commonSettings.retryInterval)
+			log.Printf("info: %s が通知一覧を取得できませんでした。リトライします：%s", bot.Name, err)
+			continue
+		}
+		break
+	}
+	return
+}
+
+func (bot *Persona) dismissNotification(ctx context.Context, id mastodon.ID) (err error) {
+	for i := 0; i < bot.commonSettings.maxRetry; i++ {
+		err = bot.Client.DismissNotification(ctx, id)
+		if err != nil {
+			time.Sleep(bot.commonSettings.retryInterval)
+			log.Printf("info: %s が id:%s の通知を削除できませんでした。リトライします：%s", bot.Name, string(id), err)
 			continue
 		}
 		break

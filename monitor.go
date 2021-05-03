@@ -129,6 +129,10 @@ func (bot *Persona) respondToNotification(ctx context.Context, ev *mastodon.Noti
 			return
 		}
 	}
+	if err = bot.dismissNotification(ctx, ev.Notification.ID); err != nil {
+		log.Printf("info: %s が id:%s の通知を削除できませんでした：%s", bot.Name, string(ev.Notification.ID), err)
+		return
+	}
 	return
 }
 

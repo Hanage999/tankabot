@@ -76,6 +76,7 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 	}
 	phrases = append(phrases, p)
 	phrases = phrases[1:]
+	phrases[0].sentenceTop = true
 
 	return
 }

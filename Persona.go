@@ -25,6 +25,8 @@ type Persona struct {
 	Starter         string
 	Assertion       string
 	ItemPool        int
+	MorningComments []string
+	EveningComments []string
 	Hashtags        []string
 	DBID            int
 	WakeHour        int
@@ -104,7 +106,7 @@ func (bot *Persona) spawn(ctx context.Context, db DB, firstLaunch bool, nextDayO
 				}
 			default:
 				log.Printf("info: %s の所在地、起床までの時間、起床後の活動時間：", bot.Name)
-				log.Printf("info: 　%s、%s、%s", getLocString(bot.LocInfo, true), sleep, active)
+				log.Printf("info: %s、%s、%s", getLocString(bot.LocInfo, true), sleep, active)
 			}
 		} else {
 			log.Printf("info: %s の生活サイクルが太陽の出没から決められませんでした。デフォルトの起居時刻を使います：%s", bot.Name, err)
@@ -127,7 +129,9 @@ func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, act
 		defer t.Stop()
 		if !firstLaunch && !nextDayOfPolarNight {
 			go func() {
-				toot := mastodon.Toot{Status: "山高み夕日隠りぬ浅茅原。" + sleepWithSun + "今宵はこれにて💤……"}
+				idx := rand.Intn(len(bot.EveningComments))
+				msg := bot.EveningComments[idx]
+				toot := mastodon.Toot{Status: msg + sleepWithSun + "今宵はこれにて💤……"}
 				if err := bot.post(ctx, toot); err != nil {
 					log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
 				}
@@ -154,7 +158,9 @@ func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, act
 		bot.activities(newCtx, db)
 		if sleep > 0 {
 			go func() {
-				toot := mastodon.Toot{Status: "やうやう白くなりゆく山際。" + wakeWithSun + "夜が明けましてございます"}
+				idx := rand.Intn(len(bot.MorningComments))
+				msg := bot.MorningComments[idx]
+				toot := mastodon.Toot{Status: msg + wakeWithSun + "夜が明けましてござります"}
 				if err := bot.post(newCtx, toot); err != nil {
 					log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
 				}

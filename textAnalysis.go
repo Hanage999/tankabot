@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/net/html"
+	"golang.org/x/text/width"
 )
 
 // mecabNode はMecabで分節されたノードとそのメタデータを含む構造体。
@@ -32,6 +33,7 @@ func extractTankas(str string, jpl chan int) (tankas string) {
 	if str == "" || !isJap(str) {
 		return
 	}
+	str = width.Fold.String(str)
 
 	phrases := segmentByPhrase(str, jpl)
 
@@ -60,7 +62,7 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 			compP := p
 			phrases = append(phrases, compP)
 			p.sentenceTop = false
-			if strings.HasSuffix(p.surface, "。") || strings.HasSuffix(p.surface, "EOS") {
+			if strings.HasSuffix(p.surface, "。") {
 				p.sentenceTop = true
 			}
 			p.surface = n.surface
@@ -96,33 +98,83 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 	nodeStrs := strings.Split(string(out), "\n")
 	nodes = make([]mecabNode, 0)
 	for _, s := range nodeStrs {
+		if s == "" || strings.Contains(s, ",\t") {
+			continue
+		}
+
 		s = strings.Replace(s, "\t", ",", 1)
 		props := strings.SplitN(s, ",", 10)
-		if len(props) == 10 && props[1] != "記号" {
-			var node mecabNode
+		var node mecabNode
+		switch {
+		case isWord(props):
 			node.surface = props[0]
 			node.moraCount = moraCount(props[8])
-			node.dependent = strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
-			node.divisible = !node.dependent || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
-			nodes = append(nodes, node)
-		} else if props[0] == "。" || props[0] == "「" || props[0] == "」" || props[0] == "EOS" || props[0] == "(" || props[0] == ")" || props[0] == "（" || props[0] == "）" {
-			var node mecabNode
-			node.surface = props[0]
-			node.moraCount = 0
-			node.dependent = true
-			node.divisible = false
-			nodes = append(nodes, node)
-		} else if len(props) == 8 && props[2] == "数" {
-			var node mecabNode
+			node.dependent = isDependent(props)
+			node.divisible = isDivisible(node.dependent, props)
+		case isNumber(props):
 			node.surface = props[0]
 			node.moraCount = 8
 			node.dependent = false
 			node.divisible = true
-			nodes = append(nodes, node)
+		case isPeriod(props):
+			node.surface = "。"
+			node.moraCount = 0
+			node.dependent = true
+			node.divisible = false
+		case isOpen(props):
+			node.surface = "「"
+			node.moraCount = 0
+			node.dependent = true
+			node.divisible = false
+		case isClose(props):
+			node.surface = "」"
+			node.moraCount = 0
+			node.dependent = true
+			node.divisible = false
+		case isAnd(props):
+			node.surface = props[0]
+			node.moraCount = 3
+			node.dependent = true
+			node.divisible = false
+		default:
+			continue
 		}
+		nodes = append(nodes, node)
 	}
 
 	return
+}
+
+func isWord(props []string) bool {
+	return len(props) == 10 && props[1] != "記号"
+}
+
+func isDependent(props []string) bool {
+	return strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+}
+
+func isDivisible(dep bool, props []string) bool {
+	return !dep || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+}
+
+func isNumber(props []string) bool {
+	return len(props) == 8 && props[2] == "数"
+}
+
+func isPeriod(props []string) bool {
+	return props[0] == "。" || props[0] == "?" || props[0] == "!" || props[0] == "EOS" || props[0] == ":" || props[0] == ";"
+}
+
+func isOpen(props []string) bool {
+	return props[2] == "括弧開" || props[0] == "(" || props[0] == "<" || props[0] == "{" || props[0] == "["
+}
+
+func isClose(props []string) bool {
+	return props[0] == "括弧閉" || props[0] == ")" || props[0] == ">" || props[0] == "}" || props[0] == "]"
+}
+
+func isAnd(props []string) bool {
+	return props[0] == "&"
 }
 
 // moraCount は文字列が何拍で発音されるかを返す。
@@ -160,21 +212,21 @@ func detectTanka(phrases []phrase) (tanka string) {
 		tanka += pr.delimiter + ku
 	}
 
+	// カッコの処理
 	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
 		return ""
 	}
 	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
 	tanka = rep.Replace(tanka)
 
-	if !(sentenceTop && (strings.HasSuffix(tanka, "。") || strings.HasSuffix(tanka, "EOS"))) {
+	// 句点相当記号の処理
+	if !(sentenceTop && strings.HasSuffix(tanka, "。")) {
 		tanka = strings.Trim(tanka, "。")
-		tanka = strings.Trim(tanka, "EOS")
-		if strings.Contains(tanka, "。") || strings.Contains(tanka, "EOS") {
+		if strings.Contains(tanka, "。") {
 			return ""
 		}
 	}
-	rep = strings.NewReplacer("。", "", "EOS", "", "(", "", ")", "", "（", "", "）", "")
-	tanka = rep.Replace(tanka)
+	tanka = strings.Replace(tanka, "。", "", -1)
 
 	return
 }

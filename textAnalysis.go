@@ -126,8 +126,8 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 		case isOpen(props):
 			node.surface = "「"
 			node.moraCount = 0
-			node.dependent = true
-			node.divisible = false
+			node.dependent = false
+			node.divisible = true
 		case isClose(props):
 			node.surface = "」"
 			node.moraCount = 0

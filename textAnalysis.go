@@ -34,6 +34,7 @@ func extractTankas(str string, jpl chan int) (tankas string) {
 		return
 	}
 	str = width.Fold.String(str)
+	str = strings.ReplaceAll(str, "\t", "")
 
 	phrases := segmentByPhrase(str, jpl)
 
@@ -59,25 +60,26 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 	var p phrase
 	for _, n := range nodes {
 		if n.divisible {
-			compP := p
-			phrases = append(phrases, compP)
-			p.sentenceTop = false
-			if strings.HasSuffix(p.surface, "。") {
-				p.sentenceTop = true
+			if p.surface == "「" {
+				p.surface += n.surface
+				p.moraCount += n.moraCount
+				p.canStart = !n.dependent
+				continue
 			}
+			phrases = append(phrases, p)
+			p.sentenceTop = strings.HasSuffix(p.surface, "。")
 			p.surface = n.surface
 			p.moraCount = n.moraCount
-			p.canStart = true
-			if n.dependent {
-				p.canStart = false
-			}
+			p.canStart = !n.dependent
 		} else {
 			p.surface += n.surface
 			p.moraCount += n.moraCount
 		}
 	}
 	phrases = append(phrases, p)
-	phrases = phrases[1:]
+	if phrases[0].surface == "" {
+		phrases = phrases[1:]
+	}
 	phrases[0].sentenceTop = true
 
 	return
@@ -98,7 +100,7 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 	nodeStrs := strings.Split(string(out), "\n")
 	nodes = make([]mecabNode, 0)
 	for _, s := range nodeStrs {
-		if s == "" || strings.Contains(s, ",\t") {
+		if s == "" || strings.HasPrefix(s, ",") {
 			continue
 		}
 
@@ -170,7 +172,7 @@ func isOpen(props []string) bool {
 }
 
 func isClose(props []string) bool {
-	return props[0] == "括弧閉" || props[0] == ")" || props[0] == ">" || props[0] == "}" || props[0] == "]"
+	return props[2] == "括弧閉" || props[0] == ")" || props[0] == ">" || props[0] == "}" || props[0] == "]"
 }
 
 func isAnd(props []string) bool {
@@ -198,18 +200,16 @@ func detectTanka(phrases []phrase) (tanka string) {
 	}
 
 	rule := []phraseRule{{"", 5}, {" ", 7}, {" ", 5}, {"\n", 7}, {" ", 7}}
-	ku := ""
-	sentenceTop := false
-	tempSTop := false
-	for i, pr := range rule {
-		ku, tempSTop, phrases = findKu(phrases, pr.moraCount)
-		if i == 0 {
-			sentenceTop = tempSTop
-		}
+
+	tp := phrases[0].sentenceTop
+
+	for _, pr := range rule {
+		ku, ps := findKu(phrases, pr.moraCount)
 		if ku == "" {
 			return ""
 		}
 		tanka += pr.delimiter + ku
+		phrases = ps
 	}
 
 	// カッコの処理
@@ -220,7 +220,7 @@ func detectTanka(phrases []phrase) (tanka string) {
 	tanka = rep.Replace(tanka)
 
 	// 句点相当記号の処理
-	if !(sentenceTop && strings.HasSuffix(tanka, "。")) {
+	if !(tp && strings.HasSuffix(tanka, "。")) {
 		tanka = strings.Trim(tanka, "。")
 		if strings.Contains(tanka, "。") {
 			return ""
@@ -232,24 +232,23 @@ func detectTanka(phrases []phrase) (tanka string) {
 }
 
 // findKu は文の先頭が指定の拍数ぴったりに収まればその部分文字列を返す。
-func findKu(phrases []phrase, mc int) (ku string, sentenceTop bool, remainder []phrase) {
+func findKu(phrases []phrase, mc int) (ku string, remainder []phrase) {
 	ic := len(phrases)
 	if ic == 0 {
 		return
 	}
 	morae := 0
 	var empty []phrase
-	sentenceTop = phrases[0].sentenceTop
 	remainder = phrases
 	for morae < mc {
 		morae += remainder[0].moraCount
 		if morae > mc {
-			return "", false, empty
+			return "", empty
 		}
 		ku += remainder[0].surface
 		remainder = remainder[1:]
 		if len(remainder) == 0 && morae != mc {
-			return "", false, empty
+			return "", empty
 		}
 	}
 

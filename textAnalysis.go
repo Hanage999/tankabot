@@ -18,6 +18,7 @@ type mecabNode struct {
 	moraCount int
 	dependent bool // dependent はそのノードが付属語かどうか。
 	divisible bool // divisible はそのノードで区切れができるかどうか。
+	prefix    bool // prefix はそのノードが接頭語相当かどうか。
 }
 
 // phrase は文節とそのメタデータを含む構造体。
@@ -58,23 +59,23 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 	}
 
 	var p phrase
+	prefixed := false
 	for _, n := range nodes {
-		if n.divisible {
-			if p.surface == "「" {
-				p.surface += n.surface
-				p.moraCount += n.moraCount
-				p.canStart = !n.dependent
-				continue
-			}
-			phrases = append(phrases, p)
-			p.sentenceTop = strings.HasSuffix(p.surface, "。")
-			p.surface = n.surface
-			p.moraCount = n.moraCount
-			p.canStart = !n.dependent
-		} else {
+		if !n.divisible || prefixed {
 			p.surface += n.surface
 			p.moraCount += n.moraCount
+			if prefixed {
+				p.canStart = !n.dependent
+			}
+			prefixed = n.prefix
+			continue
 		}
+		phrases = append(phrases, p)
+		p.sentenceTop = strings.HasSuffix(p.surface, "。")
+		p.surface = n.surface
+		p.moraCount = n.moraCount
+		p.canStart = !n.dependent
+		prefixed = n.prefix
 	}
 	phrases = append(phrases, p)
 	if phrases[0].surface == "" {
@@ -113,6 +114,7 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.moraCount = moraCount(props[8])
 			node.dependent = isDependent(props)
 			node.divisible = isDivisible(node.dependent, props)
+			node.prefix = isPrefix(props)
 		case isNumber(props):
 			node.surface = props[0]
 			node.moraCount = 8
@@ -128,6 +130,7 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.moraCount = 0
 			node.dependent = false
 			node.divisible = true
+			node.prefix = true
 		case isClose(props):
 			node.surface = "」"
 			node.moraCount = 0
@@ -157,6 +160,10 @@ func isDependent(props []string) bool {
 
 func isDivisible(dep bool, props []string) bool {
 	return !dep || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+}
+
+func isPrefix(props []string) bool {
+	return props[1] == "接頭詞"
 }
 
 func isNumber(props []string) bool {

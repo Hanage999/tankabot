@@ -17,7 +17,8 @@ CREATE TABLE `song_candidates`
   `updated_at` datetime DEFAULT NULL,
   `songs` varchar(2000) DEFAULT '',
   PRIMARY KEY(`id`),
-  UNIQUE KEY `item_per_bot` (`bot_id`,`item_id`)
+  UNIQUE KEY `item_per_bot` (`bot_id`,`item_id`),
+  UNIQUE KEY `Songs` (`songs`(200))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `items` (

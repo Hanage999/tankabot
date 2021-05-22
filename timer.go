@@ -1,42 +1,8 @@
 package tankabot
 
 import (
-	"context"
 	"time"
 )
-
-// tickAfterWaitは、最初は指定時間後に送信し、あとは別に指定する間隔ごとに送信するチャンネルを返す
-func tickAfterWait(ctx context.Context, wait time.Duration, itvl time.Duration) (ch chan string) {
-	ch = make(chan string)
-
-	go func() {
-		defer close(ch)
-		t := time.NewTimer(wait)
-		select {
-		case <-t.C:
-			ch <- "first tick"
-		case <-ctx.Done():
-			if !t.Stop() {
-				<-t.C
-			}
-			return
-		}
-
-		tk := time.NewTicker(itvl)
-
-		for {
-			select {
-			case <-tk.C:
-				ch <- "routine tick"
-			case <-ctx.Done():
-				tk.Stop()
-				return
-			}
-		}
-	}()
-
-	return
-}
 
 // untilは、指定された時刻までのDurationを返す。hourが負数の時は、分だけが指定されたとみなす。
 func until(hour, min, sec int) (dur time.Duration) {

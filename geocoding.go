@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -63,39 +62,6 @@ func getLocDataFromCoordinates(key string, lat, lng float64) (result OCResult, e
 	res.Body.Close()
 
 	result = oc.Results[0]
-
-	return
-}
-
-// getLocDataFromString は、OpenCageDataから地名に該当する座標データを返す
-func getLocDataFromString(key string, loc []string) (data OCResult, err error) {
-	area := strings.Join(loc, " ")
-	areaq := url.QueryEscape(area)
-	query := "https://api.opencagedata.com/geocode/v1/json?q=" + areaq + "&key=" + key + "&language=ja&pretty=1"
-
-	res, err := http.Get(query)
-	if err != nil {
-		log.Printf("OpenCageへのリクエストに失敗しました：%s", err)
-		return
-	}
-	if code := res.StatusCode; code >= 400 {
-		err = fmt.Errorf("OpenCageへの接続エラーです(%d)", code)
-		log.Printf("info: %s", err)
-		return
-	}
-	var oc OCResults
-	if err = json.NewDecoder(res.Body).Decode(&oc); err != nil {
-		log.Printf("info: OpenCageからのレスポンスがデコードできませんでした：%s", err)
-		res.Body.Close()
-		return
-	}
-	res.Body.Close()
-
-	if len(oc.Results) > 0 {
-		data = oc.Results[0]
-	} else {
-		err = fmt.Errorf("そんな地名おまへんがな")
-	}
 
 	return
 }

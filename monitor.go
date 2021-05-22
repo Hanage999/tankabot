@@ -146,7 +146,7 @@ func (bot *Persona) respondToMention(ctx context.Context, account mastodon.Accou
 			log.Printf("info: %s が関係取得に失敗しました", bot.Name)
 			return err
 		}
-		if (*rel[0]).Following == true {
+		if (*rel[0]).Following {
 			if err = bot.unfollow(ctx, account.ID); err != nil {
 				log.Printf("info: %s がアンフォローに失敗しました", bot.Name)
 				return err
@@ -164,7 +164,7 @@ func (bot *Persona) respondToFollow(ctx context.Context, account mastodon.Accoun
 		log.Printf("info: %s が関係取得に失敗しました", bot.Name)
 		return err
 	}
-	if (*rel[0]).Following == false {
+	if !(*rel[0]).Following {
 		if err = bot.follow(ctx, account.ID); err != nil {
 			log.Printf("info: %s がフォローに失敗しました", bot.Name)
 			return err

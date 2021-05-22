@@ -115,6 +115,11 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.dependent = isDependent(props)
 			node.divisible = isDivisible(node.dependent, props)
 			node.prefix = isPrefix(props)
+		case isKatakana(props):
+			node.surface = props[0]
+			node.moraCount = moraCount(props[0])
+			node.dependent = false
+			node.divisible = true
 		case isNumber(props):
 			node.surface = props[0]
 			node.moraCount = 8
@@ -154,6 +159,15 @@ func isWord(props []string) bool {
 	return len(props) == 10 && props[1] != "記号"
 }
 
+func isKatakana(props []string) bool {
+	for _, r := range props[0] {
+		if !unicode.In(r, unicode.Katakana) {
+			return false
+		}
+	}
+	return true
+}
+
 func isDependent(props []string) bool {
 	return strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
 }
@@ -171,7 +185,7 @@ func isNumber(props []string) bool {
 }
 
 func isPeriod(props []string) bool {
-	return props[0] == "。" || props[0] == "?" || props[0] == "!" || props[0] == "EOS" || props[0] == ":" || props[0] == ";"
+	return props[0] == "。" || props[0] == "?" || props[0] == "!" || props[0] == "EOS" || props[0] == ":" || props[0] == ";" || props[0] == "▼" || props[0] == "▲"
 }
 
 func isOpen(props []string) bool {

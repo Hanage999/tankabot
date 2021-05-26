@@ -161,7 +161,7 @@ func isWord(props []string) bool {
 
 func isKatakana(props []string) bool {
 	for _, r := range props[0] {
-		if !unicode.In(r, unicode.Katakana) {
+		if !unicode.In(r, unicode.Katakana) && string(r) != "ー" {
 			return false
 		}
 	}

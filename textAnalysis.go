@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/net/html"
-	"golang.org/x/text/width"
 )
 
 // mecabNode はMecabで分節されたノードとそのメタデータを含む構造体。
@@ -34,18 +33,27 @@ func extractTankas(str string, jpl chan int) (tankas string) {
 	if str == "" || !isJap(str) {
 		return
 	}
-	str = width.Fold.String(str)
+	//str = width.Fold.String(str)
 	str = strings.ReplaceAll(str, "\t", "")
 
 	phrases := segmentByPhrase(str, jpl)
 
+	ts := make([]string, 0)
 	for i := range phrases {
 		uta := detectTanka(phrases[i:])
 		if uta != "" {
-			tankas += "『" + uta + "』" + "\n\n"
+			dup := false
+			for _, t := range ts {
+				if "『"+uta+"』" == t {
+					dup = true
+				}
+			}
+			if !dup {
+				ts = append(ts, "『"+uta+"』")
+			}
 		}
 	}
-	tankas = strings.TrimSuffix(tankas, "\n\n")
+	tankas = strings.Join(ts, "\n\n")
 
 	return
 }
@@ -160,6 +168,7 @@ func isWord(props []string) bool {
 }
 
 func isKatakana(props []string) bool {
+	props[0] = strings.Replace(props[0], "・", "", -1)
 	for _, r := range props[0] {
 		if !unicode.In(r, unicode.Katakana) && string(r) != "ー" {
 			return false
@@ -173,7 +182,7 @@ func isDependent(props []string) bool {
 }
 
 func isDivisible(dep bool, props []string) bool {
-	return !dep || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+	return !dep || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || (props[5] == "サ変・スル" && props[0] != "し") || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
 }
 
 func isPrefix(props []string) bool {

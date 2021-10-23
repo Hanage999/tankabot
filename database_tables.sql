@@ -39,6 +39,7 @@ CREATE TABLE `rss_feeds` (
   `last_updated` datetime NOT NULL,
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
+  `alive` tinyint(1) unsigned DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `url` (`url`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

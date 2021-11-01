@@ -128,11 +128,6 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.moraCount = moraCount(props[0])
 			node.dependent = false
 			node.divisible = true
-		case isNumber(props):
-			node.surface = props[0]
-			node.moraCount = 8
-			node.dependent = false
-			node.divisible = true
 		case isPeriod(props):
 			node.surface = "。"
 			node.moraCount = 0
@@ -154,6 +149,11 @@ func parse(str string, jpl chan int) (nodes []mecabNode) {
 			node.moraCount = 3
 			node.dependent = true
 			node.divisible = false
+		case isUnknown(props):
+			node.surface = props[0]
+			node.moraCount = 8
+			node.dependent = false
+			node.divisible = true
 		default:
 			continue
 		}
@@ -189,10 +189,6 @@ func isPrefix(props []string) bool {
 	return props[1] == "接頭詞"
 }
 
-func isNumber(props []string) bool {
-	return len(props) == 8 && props[2] == "数"
-}
-
 func isPeriod(props []string) bool {
 	return props[0] == "。" || props[0] == "?" || props[0] == "!" || props[0] == "EOS" || props[0] == ":" || props[0] == ";" || props[0] == "▼" || props[0] == "▲"
 }
@@ -207,6 +203,10 @@ func isClose(props []string) bool {
 
 func isAnd(props []string) bool {
 	return props[0] == "&"
+}
+
+func isUnknown(props []string) bool {
+	return len(props) == 8 && props[1] == "名詞"
 }
 
 // moraCount は文字列が何拍で発音されるかを返す。

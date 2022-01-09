@@ -158,6 +158,9 @@ func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, act
 		log.Printf("trace: Goroutines: %d", runtime.NumGoroutine())
 		nextDayOfPolarNight = false
 		bot.activities(newCtx, db)
+		if err := bot.checkNotifications(newCtx); err != nil {
+			log.Printf("info: %s が通知を遡れませんでした。今回は諦めます……", bot.Name)
+		}
 		if sleep > 0 {
 			go func() {
 				idx := rand.Intn(len(bot.MorningComments))
@@ -165,9 +168,6 @@ func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, act
 				toot := mastodon.Toot{Status: msg + wakeWithSun + "夜が明けましてござります"}
 				if err := bot.post(newCtx, toot); err != nil {
 					log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
-				}
-				if err := bot.checkNotifications(newCtx); err != nil {
-					log.Printf("info: %s が通知を遡れませんでした。今回は諦めます……", bot.Name)
 				}
 			}()
 		}

@@ -246,15 +246,16 @@ func detectTanka(phrases []phrase) (tanka string) {
 	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
 		return ""
 	}
+	end_kakko := strings.HasSuffix(tanka, "」")
+	if strings.HasPrefix(tanka, "「") {
+		tp = true
+	}
 	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
 	tanka = rep.Replace(tanka)
 
-	// 句点相当記号の処理
-	if !(tp && strings.HasSuffix(tanka, "。")) {
-		tanka = strings.Trim(tanka, "。")
-		if strings.Contains(tanka, "。") {
-			return ""
-		}
+	// 文頭もしくは文末でなかったら帰る
+	if !(tp || end_kakko || strings.HasSuffix(tanka, "。")) {
+		return ""
 	}
 	tanka = strings.ReplaceAll(tanka, "。", "")
 

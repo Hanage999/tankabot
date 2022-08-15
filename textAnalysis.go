@@ -257,6 +257,11 @@ func detectTanka(phrases []phrase) (tanka string) {
 	if !(tp || end_kakko || strings.HasSuffix(tanka, "。")) {
 		return ""
 	}
+	// 文末でなく、しかも途中にピリオドがあったら帰る
+	if !strings.HasSuffix(tanka, "。") && strings.Contains(tanka, "。") {
+		return ""
+	}
+
 	tanka = strings.ReplaceAll(tanka, "。", "")
 
 	return

@@ -277,12 +277,11 @@ func detectTanka(phrases []phrase) (tanka string) {
 	if !(tp || endKakko || strings.HasSuffix(tanka, "。") || nounOnly) {
 		return ""
 	}
-	// 名詞短歌ではなく、しかも文末でなく、しかも途中にピリオドがあったら帰る
-	if !nounOnly && !strings.HasSuffix(tanka, "。") && strings.Contains(tanka, "。") {
+	// 名詞短歌ではなく、しかも途中にピリオドがあったら帰る
+	tanka = strings.Trim(tanka, "。")
+	if !nounOnly && strings.Contains(tanka, "。") {
 		return ""
 	}
-
-	tanka = strings.ReplaceAll(tanka, "。", "")
 
 	return
 }

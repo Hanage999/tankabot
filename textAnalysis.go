@@ -60,6 +60,95 @@ func extractTankas(str string, jpl chan int) (tankas string) {
 	return
 }
 
+// detectTanka はフレーズスライスの冒頭が短歌になっていればそれを返す。
+func detectTanka(phrases []phrase) (tanka string) {
+	if !phrases[0].canStart {
+		return
+	}
+
+	type phraseRule struct {
+		delimiter string
+		moraCount int
+	}
+
+	rule := []phraseRule{{"", 5}, {" ", 7}, {" ", 5}, {"\n", 7}, {" ", 7}}
+
+	tp := phrases[0].sentenceTop
+
+	nounOnly := true
+	for _, pr := range rule {
+		ku, no, ps := findKu(phrases, pr.moraCount)
+		if ku == "" {
+			return ""
+		}
+		tanka += pr.delimiter + ku
+		if !no {
+			nounOnly = false
+		}
+		phrases = ps
+	}
+	end := strings.HasSuffix(tanka, "。")
+	tanka = strings.Trim(tanka, "。")
+
+	// カッコの処理
+	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
+		return ""
+	}
+	end = end || strings.HasSuffix(tanka, "」")
+	tp = tp || strings.HasPrefix(tanka, "「")
+	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
+	tanka = rep.Replace(tanka)
+
+	// 途中にピリオドがあるかどうか
+	mp := strings.Contains(tanka, "。")
+
+	tanka = strings.ReplaceAll(tanka, "。", "")
+
+	// もし名詞短歌だったら即採用
+	if nounOnly {
+		return
+	}
+
+	// 文頭もしくは文末でなかったら帰る
+	if !(tp || end) {
+		return ""
+	}
+
+	// 文頭開始かつ文末終了でなく、途中にピリオドがあったら帰る
+	if !(tp && end) && mp {
+		return ""
+	}
+
+	return
+}
+
+// findKu は文の先頭が指定の拍数ぴったりに収まればその部分文字列を返す。
+func findKu(phrases []phrase, mc int) (ku string, no bool, remainder []phrase) {
+	ic := len(phrases)
+	if ic == 0 {
+		return
+	}
+	morae := 0
+	var empty []phrase
+	remainder = phrases
+	for morae < mc {
+		if !remainder[0].nounOrSymbol {
+			no = false
+		}
+		morae += remainder[0].moraCount
+		if morae > mc {
+			return "", false, empty
+		}
+		ku += remainder[0].surface
+		remainder = remainder[1:]
+		if len(remainder) == 0 && morae != mc {
+			return "", false, empty
+		}
+	}
+
+	return
+}
+
 // segmentByPhrase は文字列を短歌の句として切れる単位に分割する。
 func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 	nodes := parse(str, jpl)
@@ -230,85 +319,6 @@ func moraCount(word string) (count int) {
 	rep := strings.NewReplacer("ァ", "", "ィ", "", "ゥ", "", "ェ", "", "ォ", "", "ャ", "", "ュ", "", "ョ", "", "ヮ", "")
 	word = rep.Replace(word)
 	count = utf8.RuneCountInString(word)
-
-	return
-}
-
-// detectTanka はフレーズスライスの冒頭が短歌になっていればそれを返す。
-func detectTanka(phrases []phrase) (tanka string) {
-	if !phrases[0].canStart {
-		return
-	}
-
-	type phraseRule struct {
-		delimiter string
-		moraCount int
-	}
-
-	rule := []phraseRule{{"", 5}, {" ", 7}, {" ", 5}, {"\n", 7}, {" ", 7}}
-
-	tp := phrases[0].sentenceTop
-	nounOnly := true
-
-	for _, pr := range rule {
-		ku, no, ps := findKu(phrases, pr.moraCount)
-		if ku == "" {
-			return ""
-		}
-		tanka += pr.delimiter + ku
-		if !no {
-			nounOnly = false
-		}
-		phrases = ps
-	}
-
-	// カッコの処理
-	if strings.Count(tanka, "「") != strings.Count(tanka, "」") {
-		return ""
-	}
-	endKakko := strings.HasSuffix(tanka, "」")
-	if strings.HasPrefix(tanka, "「") {
-		tp = true
-	}
-	rep := strings.NewReplacer("。」", "", "「", "", "」", "")
-	tanka = rep.Replace(tanka)
-
-	// 文頭もしくは文末もしくは名詞短歌でなかったら帰る
-	if !(tp || endKakko || strings.HasSuffix(tanka, "。") || nounOnly) {
-		return ""
-	}
-	// 名詞短歌ではなく、しかも途中にピリオドがあったら帰る
-	tanka = strings.Trim(tanka, "。")
-	if !nounOnly && strings.Contains(tanka, "。") {
-		return ""
-	}
-
-	return
-}
-
-// findKu は文の先頭が指定の拍数ぴったりに収まればその部分文字列を返す。
-func findKu(phrases []phrase, mc int) (ku string, no bool, remainder []phrase) {
-	ic := len(phrases)
-	if ic == 0 {
-		return
-	}
-	morae := 0
-	var empty []phrase
-	remainder = phrases
-	for morae < mc {
-		if !remainder[0].nounOrSymbol {
-			no = false
-		}
-		morae += remainder[0].moraCount
-		if morae > mc {
-			return "", false, empty
-		}
-		ku += remainder[0].surface
-		remainder = remainder[1:]
-		if len(remainder) == 0 && morae != mc {
-			return "", false, empty
-		}
-	}
 
 	return
 }

@@ -128,6 +128,7 @@ func findKu(phrases []phrase, mc int) (ku string, no bool, remainder []phrase) {
 	if ic == 0 {
 		return
 	}
+	no = true
 	morae := 0
 	var empty []phrase
 	remainder = phrases

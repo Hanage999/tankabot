@@ -71,7 +71,7 @@ func detectTanka(phrases []phrase) (tanka string) {
 		moraCount int
 	}
 
-	rule := []phraseRule{{"", 5}, {" ", 7}, {" ", 5}, {"\n", 7}, {" ", 7}}
+	rule := []phraseRule{{"", 5}, {" ", 7}, {" ", 5}, {" ", 7}, {" ", 7}}
 
 	tp := phrases[0].sentenceTop
 

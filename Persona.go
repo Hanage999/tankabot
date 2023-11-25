@@ -36,7 +36,8 @@ type Persona struct {
 	LivesWithSun    bool
 	Latitude        float64
 	Longitude       float64
-	LocInfo         OCResult
+	PlaceName       string
+	TimeZone        string
 	RandomFrequency int
 	Awake           time.Duration
 	*commonSettings
@@ -80,26 +81,26 @@ func (bot *Persona) spawn(ctx context.Context, db DB, firstLaunch bool, nextDayO
 	bot.Awake = active
 
 	if bot.LivesWithSun {
-		sl, ac, cond, err := getDayCycleBySunMovement(bot.LocInfo.Annotations.Timezone.Name, bot.Latitude, bot.Longitude)
+		sl, ac, cond, err := getDayCycleBySunMovement(bot.TimeZone, bot.Latitude, bot.Longitude)
 		if err == nil {
 			sleep, active = sl, ac
 			bot.Awake = ac
 			switch cond {
 			case "白夜":
-				log.Printf("info: %s がいる %s は今、白夜です", bot.Name, getLocString(bot.LocInfo, false))
+				log.Printf("info: %s がいる %s は今、白夜です", bot.Name, bot.PlaceName)
 				if !firstLaunch {
 					go func() {
-						toot := mastodon.Toot{Status: getLocString(bot.LocInfo, false) + "はいま、もっとも昏き頃合いなれど、白き夜ゆえ日隠るることなし。さてもわが目の閉じるやあらむ"}
+						toot := mastodon.Toot{Status: bot.PlaceName + "はいま、もっとも昏き頃合いなれど、白き夜ゆえ日隠るることなし。さてもわが目の閉じるやあらむ"}
 						if err := bot.post(ctx, toot); err != nil {
 							log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
 						}
 					}()
 				}
 			case "極夜":
-				log.Printf("info: %s がいる %s は今、極夜です", bot.Name, getLocString(bot.LocInfo, false))
+				log.Printf("info: %s がいる %s は今、極夜です", bot.Name, bot.PlaceName)
 				if !firstLaunch && nextDayOfPolarNight {
 					go func() {
-						toot := mastodon.Toot{Status: getLocString(bot.LocInfo, false) + "はいま、もっとも日高き頃合いなれど、夜極まりて光も射さず、たえてわが目の覚むることなし💤"}
+						toot := mastodon.Toot{Status: bot.PlaceName + "はいま、もっとも日高き頃合いなれど、夜極まりて光も射さず、たえてわが目の覚むることなし💤"}
 						if err := bot.post(ctx, toot); err != nil {
 							log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
 						}
@@ -107,7 +108,7 @@ func (bot *Persona) spawn(ctx context.Context, db DB, firstLaunch bool, nextDayO
 				}
 			default:
 				log.Printf("info: %s の所在地、起床までの時間、起床後の活動時間：", bot.Name)
-				log.Printf("info: %s、%s、%s", getLocString(bot.LocInfo, true), sleep, active)
+				log.Printf("info: %s、%s、%s", bot.PlaceName, sleep, active)
 			}
 		} else {
 			log.Printf("info: %s の生活サイクルが太陽の出没から決められませんでした。デフォルトの起居時刻を使います：%s", bot.Name, err)
@@ -121,8 +122,8 @@ func (bot *Persona) spawn(ctx context.Context, db DB, firstLaunch bool, nextDayO
 func (bot *Persona) daylife(ctx context.Context, db DB, sleep time.Duration, active time.Duration, firstLaunch bool, nextDayOfPolarNight bool) {
 	wakeWithSun, sleepWithSun := "", ""
 	if bot.LivesWithSun {
-		wakeWithSun = getLocString(bot.LocInfo, false) + "も"
-		sleepWithSun = getLocString(bot.LocInfo, true) + "より"
+		wakeWithSun = bot.PlaceName + "も"
+		sleepWithSun = bot.PlaceName + "より"
 	}
 
 	if sleep > 0 {

@@ -8,26 +8,35 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ringsaturn/tzf"
 )
 
-// OCResult は、OpenCageからのデータを格納する
-type OCResult struct {
-	Annotations struct {
-		Flag     string `json:"flag"`
-		Timezone struct {
-			Name string `json:"name"`
-		} `json:"timezone"`
-	} `json:"annotations"`
-	Components map[string]interface{} `json:"components"`
-	Geometry   struct {
-		Lat float64 `json:"lat"`
-		Lng float64 `json:"lng"`
-	} `json:"geometry"`
+// YahooPlaceInfoResults は、Yahoo場所情報APIからのデータを格納する
+type YahooPlaceInfoResults struct {
+	ResultSet struct {
+		Result []struct {
+			Name     string `json:"Name"`
+			Where    string `json:"Where"`
+			Combined string `json:"Combined"`
+		} `json:"Result"`
+	} `json:"ResultSet"`
 }
 
-// OCResults は、OpenCageからのデータを格納する
-type OCResults struct {
-	Results []OCResult `json:"results"`
+// YahooContentsGeoCoderResults は、YahooコンテンツジオコーダAPIからのデータを格納する
+type YahooContentsGeoCoderResults struct {
+	ResultInfo struct {
+		Count int `json:"Count"`
+	} `json:"ResultInfo"`
+	Feature []struct {
+		Name     string `json:"Name"`
+		Geometry struct {
+			Coordinates string `json:"Coordinates"`
+		} `json:"Geometry"`
+		Property struct {
+			Address string `json:"Address"`
+		} `json:"Property"`
+	}
 }
 
 // SunInfo は、日の入りと日の出時刻を格納する
@@ -40,102 +49,38 @@ type SunInfo struct {
 }
 
 // getLocDatafromCoordinates は、botの座標から所在地情報を取得して格納する
-func getLocDataFromCoordinates(key string, lat, lng float64) (result OCResult, err error) {
-	query := "https://api.opencagedata.com/geocode/v1/json?q=" + fmt.Sprint(lat) + "%2C" + fmt.Sprint(lng) + "&key=" + key + "&language=ja&pretty=1"
+func getLocDataFromCoordinates(key string, lat, lng float64) (name, timeZone string, err error) {
+	query := "https://map.yahooapis.jp/placeinfo/V1/get?lat=" + fmt.Sprint(lat) + "&lon=" + fmt.Sprint(lng) + "&appid=" + key + "&sort=-match&output=json"
 
 	res, err := http.Get(query)
 	if err != nil {
-		log.Printf("info: OpenCageへのリクエストに失敗しました：%s", err)
+		log.Printf("info: map.yahooapis.jpへのリクエストに失敗しました：%s", err)
 		return
 	}
 	if code := res.StatusCode; code >= 400 {
-		err = fmt.Errorf("OpenCageへの接続エラーです(%d)", code)
+		err = fmt.Errorf("map.yahooapis.jpへの接続エラーです(%d)", code)
 		log.Printf("info: %s", err)
 		return
 	}
-	var oc OCResults
-	if err = json.NewDecoder(res.Body).Decode(&oc); err != nil {
-		log.Printf("info: OpenCageからのレスポンスがデコードできませんでした：%s", err)
+	var yr YahooPlaceInfoResults
+	if err = json.NewDecoder(res.Body).Decode(&yr); err != nil {
+		log.Printf("info: map.yahooapis.jpからのレスポンスがデコードできませんでした：%s", err)
 		res.Body.Close()
 		return
 	}
 	res.Body.Close()
 
-	result = oc.Results[0]
-
-	return
-}
-
-// getLocString は、現在地の文字列を返す
-func getLocString(data OCResult, simple bool) (str string) {
-	mp := make(map[string]string)
-
-	for k, v := range data.Components {
-		if str, ok := v.(string); ok {
-			mp[k] = str
-		} else {
-			mp[k] = ""
-		}
+	name = yr.ResultSet.Result[0].Where + "なる" + yr.ResultSet.Result[0].Name
+	if name == "" {
+		name = "地球のどこか"
 	}
 
-	tp := mp["_type"]
-	str = mp[tp]
-
-	country := mp["country"] + data.Annotations.Flag
-	state := mp["state"]
-	stateDistrict := mp["state_district"]
-	county := mp["county"]
-	city := mp["city"]
-	cityDistrict := mp["city_district"]
-	suburb := mp["suburb"]
-	town := mp["town"]
-	neighborhood := mp["neighborhood"]
-	unknown := mp["unknown"]
-
-	names := [...]string{unknown, neighborhood, town, suburb, cityDistrict, city}
-	for _, name := range names {
-		if str != "" {
-			break
-		}
-		str = name
+	finder, err := tzf.NewDefaultFinder()
+	if err != nil {
+		log.Printf("info: %s", err)
+		return "", "", err
 	}
-
-	if simple {
-		return
-	}
-
-	if country == "" {
-		country = "国ではないどこか"
-	}
-
-	countryKakko := ""
-	if strings.Contains(country, "日本") {
-		country = ""
-	} else {
-		countryKakko = "（" + country + "）"
-	}
-
-	nameadrs := [...]*string{&stateDistrict, &county, &city, &cityDistrict, &suburb, &town, &neighborhood}
-	for _, name := range nameadrs {
-		if str == *name {
-			*name = ""
-		}
-	}
-
-	if town == city {
-		town = ""
-	}
-
-	if str == state {
-		if country != "" {
-			str = country + "の" + str
-		}
-	} else {
-		details := state + stateDistrict + county + city + cityDistrict + suburb + town + neighborhood + countryKakko
-		if details != "" {
-			str = details + "の" + str
-		}
-	}
+	timeZone = finder.GetTimezoneName(lat, lng)
 
 	return
 }

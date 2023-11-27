@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ringsaturn/tzf"
 )
 
 // YahooPlaceInfoResults は、Yahoo場所情報APIからのデータを格納する
@@ -48,6 +51,7 @@ type SunInfo struct {
 
 // getLocDatafromCoordinates は、botの座標から所在地情報を取得して格納する
 func getLocDataFromCoordinates(key string, lat, lng float64) (name, timeZone string, err error) {
+	key = url.QueryEscape(key)
 	query := "https://map.yahooapis.jp/placeinfo/V1/get?lat=" + fmt.Sprint(lat) + "&lon=" + fmt.Sprint(lng) + "&appid=" + key + "&sort=-match&output=json"
 
 	res, err := http.Get(query)
@@ -68,11 +72,22 @@ func getLocDataFromCoordinates(key string, lat, lng float64) (name, timeZone str
 	}
 	res.Body.Close()
 
-	name = yr.ResultSet.Result[0].Where + "なる" + yr.ResultSet.Result[0].Name
-	if name == "" {
-		name = "地球のどこか"
+	if yr.ResultSet.Result[0].Name == "" {
+		if yr.ResultSet.Result[0].Where == "" {
+			name = "地球のどこか"
+		} else {
+			name = yr.ResultSet.Result[0].Where
+		}
+	} else {
+		name = yr.ResultSet.Result[0].Where + "の" + yr.ResultSet.Result[0].Name
 	}
 
+	var f tzf.F
+	f, err = tzf.NewDefaultFinder()
+	if err != nil {
+		log.Printf("info: %s", err)
+		return
+	}
 	timeZone = f.GetTimezoneName(lng, lat)
 
 	return

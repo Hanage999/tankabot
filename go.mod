@@ -7,15 +7,15 @@ toolchain go1.21.4
 require (
 	github.com/comail/colog v0.0.0-20160416085026-fba8e7b1f46c
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/hanage999/go-mastodon v0.0.5-0.20230227011933-362552b37e59
+	github.com/hanage999/go-mastodon v0.0.5-0.20240814012555-74784ff6b029
 	github.com/ringsaturn/tzf v0.14.0
 	github.com/spf13/viper v1.7.1
-	golang.org/x/net v0.1.0
+	golang.org/x/net v0.25.0
 )
 
 require (
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -34,8 +34,8 @@ require (
 	github.com/twpayne/go-polyline v1.1.1 // indirect
 	go.mongodb.org/mongo-driver v1.11.4 // indirect
 	golang.org/x/exp v0.0.0-20221031165847-c99f073a8326 // indirect
-	golang.org/x/sys v0.1.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

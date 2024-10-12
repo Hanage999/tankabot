@@ -101,6 +101,10 @@ func (bot *Persona) respondToUpdate(ctx context.Context, ev *mastodon.UpdateEven
 			st = "短歌を発見しました！"
 			msg = "@" + orig.Account.Acct + " \n\n" + tankas
 		}
+		// 短歌生成ありがとうのふぁぼ
+		if err = bot.fav(ctx, orig.ID); err != nil {
+			log.Printf("info: %s がふぁぼを諦めました", bot.Name)
+		}
 		toot := mastodon.Toot{Status: msg, SpoilerText: st, Visibility: orig.Visibility, InReplyToID: orig.ID}
 		if err = bot.post(ctx, toot); err != nil {
 			log.Printf("info: %s がリプライに失敗しました", bot.Name)

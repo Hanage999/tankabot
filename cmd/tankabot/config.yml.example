@@ -14,8 +14,9 @@ NumConcurrentLangJobs: 4    # 言語解析ジョブの同時実行数の上限�
 Persona:   # botのアカウント情報
     Name: mybot #任意。ログ出力に使われる。
     Instance: https://example.com
-    Email: mybot@mymail.com
-    Password: ***************
+    ClientKey: ***************      # 以下3項目はMastodonユーザー設定→「開発」→「新規アプリ」から生成
+    ClientSecret: ***************   # アクセス権は read profile write follow push にチェック
+    AccessToken: ***************    #
     WakeHour: 6     # 起きる時刻（時）
     WakeMin: 0      # 起きる時刻（分）
     SleepHour: 22   # 寝る時刻（時）

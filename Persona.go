@@ -16,10 +16,10 @@ import (
 type Persona struct {
 	Name            string
 	Instance        string
-	MyApp           *MastoApp
-	Email           string
-	Password        string
 	Client          *mastodon.Client
+	ClientKey       string
+	ClientSecret    string
+	AccessToken     string
 	MyID            mastodon.ID
 	Title           string
 	Starter         string
@@ -44,34 +44,15 @@ type Persona struct {
 }
 
 // connectPersona はbotとMastodonサーバの接続を確立する。
-func connectPersona(apps []*MastoApp, bot *Persona) (err error) {
+func connectPersona(bot *Persona) (err error) {
 	ctx := context.Background()
-
-	bot.MyApp, err = getApp(bot.Instance, apps)
-	if err != nil {
-		log.Printf("alert: %s のためのアプリが取得できませんでした：%s", bot.Name, err)
-		return
-	}
 
 	bot.Client = mastodon.NewClient(&mastodon.Config{
 		Server:       bot.Instance,
-		ClientID:     bot.MyApp.ClientID,
-		ClientSecret: bot.MyApp.ClientSecret,
+		ClientID:     bot.ClientKey,
+		ClientSecret: bot.ClientSecret,
+		AccessToken:  bot.AccessToken,
 	})
-
-	for i := 0; i < bot.commonSettings.maxRetry+45; i++ {
-		err = bot.Client.Authenticate(ctx, bot.Email, bot.Password)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("alert: %s がアクセストークンの取得に失敗しました。リトライします：%s", bot.Name, err)
-			continue
-		}
-		break
-	}
-	if err != nil {
-		log.Printf("alert: %s がアクセストークンの取得に失敗しました。終了します：%s", bot.Name, err)
-		return
-	}
 
 	acc, err := bot.Client.GetAccountCurrentUser(ctx)
 	if err != nil {
@@ -246,6 +227,21 @@ func (ns Notifications) Less(i, j int) bool {
 	iv, _ := strconv.Atoi(string(ns[i].ID))
 	jv, _ := strconv.Atoi(string(ns[j].ID))
 	return iv < jv
+}
+
+// favは、ステータスをふぁぼる。失敗したらmaxRetryを上限に再試行する。
+func (bot *Persona) fav(ctx context.Context, id mastodon.ID) (err error) {
+	time.Sleep(time.Duration(rand.Intn(2000)+1000) * time.Millisecond)
+	for i := 0; i < bot.commonSettings.maxRetry; i++ {
+		_, err = bot.Client.Favourite(ctx, id)
+		if err != nil {
+			time.Sleep(bot.commonSettings.retryInterval)
+			log.Printf("info: %s がふぁぼれませんでした。リトライします：%s", bot.Name, err)
+			continue
+		}
+		break
+	}
+	return
 }
 
 // post は投稿する。失敗したらmaxRetryを上限に再試行する。

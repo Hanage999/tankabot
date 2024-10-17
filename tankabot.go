@@ -79,7 +79,7 @@ func Initialize() (bot Persona, db DB, err error) {
 
 	// botをMastodonサーバに接続
 	if err := connectPersona(&bot); err != nil {
-		log.Printf("alert: %s をMastodonサーバに接続できませんでした", bot.Name)
+		log.Printf("alert: %s をMastodonサーバに接続できませんでした。終了します", bot.Name)
 		return bot, db, err
 	}
 

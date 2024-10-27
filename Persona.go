@@ -61,7 +61,7 @@ func (bot *Persona) getMastoID() (err error) {
 		log.Printf("alert: %s のアカウントIDが取得できません：%s", bot.Name, err)
 	}
 
-	log.Printf("alert: %s のアカウントIDが取得できませんでした：%s", bot.Name, err)
+	log.Printf("alert: %s のアカウントID取得がリトライ上限に達しました：%s", bot.Name, err)
 	return
 }
 
@@ -242,7 +242,7 @@ func (bot *Persona) fav(ctx context.Context, id mastodon.ID) (err error) {
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s がふぁぼれませんでした：%s", bot.Name, err)
+	log.Printf("info: %s のふぁぼがリトライ上限に達しました：%s", bot.Name, err)
 	return
 }
 
@@ -258,7 +258,7 @@ func (bot *Persona) post(ctx context.Context, toot mastodon.Toot) (err error) {
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s がトゥートできませんでした：%s\n %s", bot.Name, toot.Status, err)
+	log.Printf("info: %s のトゥートがリトライ上限に達しました：%s\n %s", bot.Name, toot.Status, err)
 	return
 }
 
@@ -274,7 +274,7 @@ func (bot *Persona) follow(ctx context.Context, id mastodon.ID) (err error) {
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s がフォローできませんでした：%s", bot.Name, err)
+	log.Printf("info: %s のフォローがリトライ上限に達しました：%s", bot.Name, err)
 	return
 }
 
@@ -290,7 +290,7 @@ func (bot *Persona) unfollow(ctx context.Context, id mastodon.ID) (err error) {
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s がアンフォローできませんでした：%s", bot.Name, err)
+	log.Printf("info: %s アンフォローがリトライ上限に達しました：%s", bot.Name, err)
 	return
 }
 
@@ -305,7 +305,7 @@ func (bot *Persona) relationWith(ctx context.Context, id mastodon.ID) (rel []*ma
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s と id:%s の関係が取得できませんでした：%s", bot.Name, string(id), err)
+	log.Printf("info: %s と id:%s の関係取得がリトライ上限に達しました：%s", bot.Name, string(id), err)
 	return
 }
 
@@ -320,7 +320,7 @@ func (bot *Persona) notifications(ctx context.Context) (ns Notifications, err er
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s が通知一覧を取得できませんでした：%s", bot.Name, err)
+	log.Printf("info: %s の通知一覧取得がリトライ上限に達しました：%s", bot.Name, err)
 	return
 }
 
@@ -334,6 +334,6 @@ func (bot *Persona) dismissNotification(ctx context.Context, id mastodon.ID) (er
 		time.Sleep(bot.commonSettings.retryInterval)
 	}
 
-	log.Printf("info: %s が id:%s の通知を削除できませんでした：%s", bot.Name, string(id), err)
+	log.Printf("info: %s が id:%s の通知削除がリトライ上限に達しました：%s", bot.Name, string(id), err)
 	return
 }

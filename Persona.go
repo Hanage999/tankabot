@@ -41,34 +41,27 @@ type Persona struct {
 	*commonSettings
 }
 
-// connectPersona はbotとMastodonサーバの接続を確立する。
-func connectPersona(bot *Persona) (err error) {
+// getMastoID はbotのMastodonアカウントIDを取得する。
+func (bot *Persona) getMastoID() (err error) {
 	ctx := context.Background()
 
 	bot.Client = mastodon.NewClient(&mastodon.Config{
-		Server:       bot.Instance,
-		ClientID:     "",
-		ClientSecret: "",
-		AccessToken:  bot.AccessToken,
+		Server:      bot.Instance,
+		AccessToken: bot.AccessToken,
 	})
 
 	var acc *mastodon.Account
 	for i := 0; i < bot.commonSettings.maxRetry+45; i++ {
 		acc, err = bot.Client.GetAccountCurrentUser(ctx)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("alert: %s のアカウントIDが取得できません。リトライします：%s", bot.Name, err)
-			continue
+		if err == nil {
+			bot.MyID = acc.ID
+			return
 		}
-		break
-	}
-	if err != nil {
-		log.Printf("alert: %s のアカウントIDが取得できませんでした：%s", bot.Name, err)
-		return
+		time.Sleep(bot.commonSettings.retryInterval)
+		log.Printf("alert: %s のアカウントIDが取得できません：%s", bot.Name, err)
 	}
 
-	bot.MyID = acc.ID
-
+	log.Printf("alert: %s のアカウントIDが取得できませんでした：%s", bot.Name, err)
 	return
 }
 
@@ -242,13 +235,14 @@ func (bot *Persona) fav(ctx context.Context, id mastodon.ID) (err error) {
 	time.Sleep(time.Duration(rand.Intn(2000)+1000) * time.Millisecond)
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		_, err = bot.Client.Favourite(ctx, id)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s がふぁぼれませんでした。リトライします：%s", bot.Name, err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s がふぁぼれません：%s", bot.Name, err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s がふぁぼれませんでした：%s", bot.Name, err)
 	return
 }
 
@@ -257,13 +251,14 @@ func (bot *Persona) post(ctx context.Context, toot mastodon.Toot) (err error) {
 	time.Sleep(time.Duration(rand.Intn(5000)+3000) * time.Millisecond)
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		_, err = bot.Client.PostStatus(ctx, &toot)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s がトゥートできませんでした。リトライします：%s\n %s", bot.Name, toot.Status, err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s がトゥートできません：%s\n %s", bot.Name, toot.Status, err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s がトゥートできませんでした：%s\n %s", bot.Name, toot.Status, err)
 	return
 }
 
@@ -272,13 +267,14 @@ func (bot *Persona) follow(ctx context.Context, id mastodon.ID) (err error) {
 	time.Sleep(time.Duration(rand.Intn(2000)+1000) * time.Millisecond)
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		_, err = bot.Client.AccountFollow(ctx, id)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s がフォローできませんでした。リトライします：%s", bot.Name, err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s がフォローできません：%s", bot.Name, err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s がフォローできませんでした：%s", bot.Name, err)
 	return
 }
 
@@ -287,13 +283,14 @@ func (bot *Persona) unfollow(ctx context.Context, id mastodon.ID) (err error) {
 	time.Sleep(time.Duration(rand.Intn(2000)+1000) * time.Millisecond)
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		_, err = bot.Client.AccountUnfollow(ctx, id)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s がアンフォローできませんでした。リトライします：%s", bot.Name, err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s がアンフォローできません：%s", bot.Name, err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s がアンフォローできませんでした：%s", bot.Name, err)
 	return
 }
 
@@ -301,13 +298,14 @@ func (bot *Persona) unfollow(ctx context.Context, id mastodon.ID) (err error) {
 func (bot *Persona) relationWith(ctx context.Context, id mastodon.ID) (rel []*mastodon.Relationship, err error) {
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		rel, err = bot.Client.GetAccountRelationships(ctx, []string{string(id)})
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s と id:%s の関係が取得できませんでした。リトライします：%s", bot.Name, string(id), err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s と id:%s の関係が取得できません：%s", bot.Name, string(id), err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s と id:%s の関係が取得できませんでした：%s", bot.Name, string(id), err)
 	return
 }
 
@@ -315,25 +313,27 @@ func (bot *Persona) notifications(ctx context.Context) (ns Notifications, err er
 	var pg mastodon.Pagination
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		ns, err = bot.Client.GetNotifications(ctx, &pg)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s が通知一覧を取得できませんでした。リトライします：%s", bot.Name, err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s が通知一覧を取得できません：%s", bot.Name, err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s が通知一覧を取得できませんでした：%s", bot.Name, err)
 	return
 }
 
 func (bot *Persona) dismissNotification(ctx context.Context, id mastodon.ID) (err error) {
 	for i := 0; i < bot.commonSettings.maxRetry; i++ {
 		err = bot.Client.DismissNotification(ctx, id)
-		if err != nil {
-			time.Sleep(bot.commonSettings.retryInterval)
-			log.Printf("info: %s が id:%s の通知を削除できませんでした。リトライします：%s", bot.Name, string(id), err)
-			continue
+		if err == nil {
+			return
 		}
-		break
+		log.Printf("info: %s が id:%s の通知を削除できません：%s", bot.Name, string(id), err)
+		time.Sleep(bot.commonSettings.retryInterval)
 	}
+
+	log.Printf("info: %s が id:%s の通知を削除できませんでした：%s", bot.Name, string(id), err)
 	return
 }

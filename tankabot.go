@@ -77,9 +77,9 @@ func Initialize() (bot Persona, db DB, err error) {
 	bot.commonSettings = &cmn
 	cr = conf.GetStringMapString("DBCredentials")
 
-	// botをMastodonサーバに接続
-	if err := connectPersona(&bot); err != nil {
-		log.Printf("alert: %s をMastodonサーバに接続できませんでした。終了します", bot.Name)
+	// botをMastodonサーバに接続し、アカウントIDを取得
+	if err := bot.getMastoID(); err != nil {
+		log.Printf("alert: %s のMastodonアカウントIDが取得できませんでした。終了します", bot.Name)
 		return bot, db, err
 	}
 

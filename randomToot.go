@@ -3,6 +3,7 @@ package tankabot
 import (
 	"context"
 	"log"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -31,7 +32,7 @@ func (bot *Persona) randomToot(ctx context.Context, db DB) {
 				log.Printf("info: %s がアイテムの収集に失敗しました", bot.Name)
 				return
 			}
-			if err := bot.newsToot(ctx, stock, db); err != nil {
+			if err := bot.newsToot(ctx, bt, stock, db); err != nil {
 				log.Printf("info: %s がニューストゥートに失敗しました", bot.Name)
 			}
 		}()
@@ -40,26 +41,37 @@ func (bot *Persona) randomToot(ctx context.Context, db DB) {
 	}
 }
 
-func (bot *Persona) newsToot(ctx context.Context, stock int, db DB) (err error) {
+func (bot *Persona) newsToot(ctx context.Context, itvl, stock int, db DB) (err error) {
 	if stock == 0 {
 		return
 	}
 
-	toot, item, err := bot.createSongNewsToot(db)
-	if err != nil {
-		log.Printf("info :%s が短歌ニューストゥートの作成に失敗しました", bot.Name)
-		return err
+	tf := float64(bot.Awake) / float64(time.Duration(itvl)*time.Minute)
+	bst := 1
+	if stock > 10 {
+		bst = 2
 	}
-	if item.Title != "" {
-		if err = bot.post(ctx, toot); err != nil {
-			log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
-		} else {
-			if err = db.deleteItem(bot, item); err != nil {
-				log.Printf("info: %s がトゥート済みアイテムの削除に失敗しました", bot.Name)
+	tn := int(math.Ceil(float64(stock)/tf)) * bst
+	if tn > 10 {
+		tn = 10
+	}
+
+	for i := 0; i < tn; i++ {
+		toot, item, err := bot.createSongNewsToot(db)
+		if err != nil {
+			log.Printf("info :%s が短歌ニューストゥートの作成に失敗しました", bot.Name)
+			return err
+		}
+		if item.Title != "" {
+			if err = bot.post(ctx, toot); err != nil {
+				log.Printf("info: %s がトゥートできませんでした。今回は諦めます……", bot.Name)
+			} else {
+				if err = db.deleteItem(bot, item); err != nil {
+					log.Printf("info: %s がトゥート済みアイテムの削除に失敗しました", bot.Name)
+				}
 			}
 		}
 	}
-
 	return
 }
 

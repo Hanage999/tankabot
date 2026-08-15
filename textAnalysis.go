@@ -42,7 +42,10 @@ func extractTankas(ctx context.Context, str string, analyzer *sudachiAnalyzer) (
 	if err != nil {
 		return "", err
 	}
+	return extractTankasFromPhrases(phrases), nil
+}
 
+func extractTankasFromPhrases(phrases []phrase) string {
 	ts := make([]string, 0)
 	for i := range phrases {
 		uta := detectTanka(phrases[i:])
@@ -58,9 +61,7 @@ func extractTankas(ctx context.Context, str string, analyzer *sudachiAnalyzer) (
 			}
 		}
 	}
-	tankas = strings.Join(ts, "\n\n")
-
-	return tankas, nil
+	return strings.Join(ts, "\n\n")
 }
 
 // detectTanka はフレーズスライスの冒頭が短歌になっていればそれを返す。
@@ -159,9 +160,12 @@ func segmentByPhrase(ctx context.Context, str string, analyzer *sudachiAnalyzer)
 	if err != nil {
 		return nil, err
 	}
+	return segmentNodesByPhrase(nodes), nil
+}
 
+func segmentNodesByPhrase(nodes []analysisNode) (phrases []phrase) {
 	if len(nodes) < 2 {
-		return nil, nil
+		return nil
 	}
 
 	var p phrase
@@ -191,7 +195,7 @@ func segmentByPhrase(ctx context.Context, str string, analyzer *sudachiAnalyzer)
 	}
 	phrases[0].sentenceTop = true
 
-	return phrases, nil
+	return phrases
 }
 
 // parse は文字列をSudachiで形態素解析し、短歌検出用ノードへ変換する。
@@ -370,13 +374,15 @@ func followsContinuative(token *sudachiToken) bool {
 func isDivisible(dependent bool, token sudachiToken) bool {
 	pos := token.PartOfSpeech
 	return !dependent || token.Surface == "もの" || token.Surface == "こと" ||
-		pos[1] == "副助詞" || token.Surface == "日" ||
+		token.Surface == "日" ||
 		token.ReadingForm == "イイ" || token.ReadingForm == "ヨイ" ||
 		token.ReadingForm == "トキ" || token.ReadingForm == "トコロ" ||
 		(isSahen(token) && token.Surface != "し") ||
 		(pos[0] == "動詞" && lemmaIs(token, "ある", "有る")) ||
 		(pos[0] == "形容詞" && lemmaIs(token, "ない", "無い")) ||
-		(pos[0] == "動詞" && lemmaIs(token, "なる", "成る"))
+		(pos[0] == "動詞" && lemmaIs(token, "なる", "成る")) ||
+		(pos[1] == "副助詞" && !lemmaIs(token, "や", "か", "し", "ぞ", "って", "つ")) ||
+		(pos[1] == "係助詞" && !lemmaIs(token, "は", "も", "ぞ", "や"))
 }
 
 func isSahen(token sudachiToken) bool {

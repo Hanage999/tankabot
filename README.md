@@ -24,6 +24,21 @@ TANKABOT_SUDACHI_API_URL=http://localhost:8080 go test -run TestLiveSudachiAPICo
 + 設定ファイルでRandomFrequencyをゼロ以上にすると、不定期にネットの記事から短歌を拾って呟く。（この機能を使わない場合は、RandomFrequencyはゼロに設定してください）
 + -p <整数> オプション付きで起動すると、<整数>分限定で起動する。
 
+## 句切り確認コマンド
+
+`cmd/kugiri` は、任意の文字列をbotと同じ規則で区切り、各単位の拍数と検出された短歌を表示します。
+
+```bash
+go build -o kugiri ./cmd/kugiri
+./kugiri -api-url http://localhost:8080 '解析する文字列'
+```
+
+文字列は標準入力からも渡せます。接続先は `TANKABOT_SUDACHI_API_URL` 環境変数でも指定できます。
+
+```bash
+echo '解析する文字列' | TANKABOT_SUDACHI_API_URL=http://localhost:8080 ./kugiri
+```
+
 ## 使い方
 0. 下準備：database_tables.sql の記載に従って、MySQLデータベースにテーブルを作成する。定期的に[feedAggregator](https://blog.crazynewworld.net/2018/10/29/323/)などを使ってRSSアイテムを収集しておく。
 1. cmd/tankabot フォルダで go get、go build すると、フォルダに tankabot コマンドができる。

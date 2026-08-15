@@ -31,11 +31,6 @@ func TestNodeFromSudachiTokenPreservesPhraseRules(t *testing.T) {
 			want:  analysisNode{surface: "へ", moraCount: 1, dependent: true},
 		},
 		{
-			name:  "divisible adverbial particle",
-			token: testToken("まで", "助詞", "副助詞", "*", "まで", "マデ", false),
-			want:  analysisNode{surface: "まで", moraCount: 2, dependent: true, divisible: true},
-		},
-		{
 			name:  "nominal suffix",
 			token: testToken("人", "接尾辞", "名詞的", "*", "人", "ジン", false),
 			want:  analysisNode{surface: "人", moraCount: 2, dependent: true, nounOrSymbol: true},
@@ -99,6 +94,43 @@ func TestNodeFromSudachiTokenPreservesPhraseRules(t *testing.T) {
 	}
 }
 
+func TestSelectedParticlesMayBeginAKu(t *testing.T) {
+	tests := []struct {
+		pos1      string
+		form      string
+		reading   string
+		divisible bool
+	}{
+		{pos1: "副助詞", form: "くらい", reading: "クライ", divisible: true},
+		{pos1: "副助詞", form: "まで", reading: "マデ", divisible: true},
+		{pos1: "副助詞", form: "だけ", reading: "ダケ", divisible: true},
+		{pos1: "副助詞", form: "や", reading: "ヤ"},
+		{pos1: "副助詞", form: "か", reading: "カ"},
+		{pos1: "副助詞", form: "し", reading: "シ"},
+		{pos1: "副助詞", form: "ぞ", reading: "ゾ"},
+		{pos1: "副助詞", form: "って", reading: "ッテ"},
+		{pos1: "副助詞", form: "つ", reading: "ツ"},
+		{pos1: "係助詞", form: "こそ", reading: "コソ", divisible: true},
+		{pos1: "係助詞", form: "は", reading: "ハ"},
+		{pos1: "係助詞", form: "も", reading: "モ"},
+		{pos1: "係助詞", form: "ぞ", reading: "ゾ"},
+		{pos1: "係助詞", form: "や", reading: "ヤ"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pos1+"/"+tt.form, func(t *testing.T) {
+			token := testToken(tt.form, "助詞", tt.pos1, "*", tt.form, tt.reading, false)
+			got := nodeFromLexicalToken(token, nil)
+			if !got.dependent {
+				t.Fatalf("node = %#v, particle must remain dependent", got)
+			}
+			if got.divisible != tt.divisible {
+				t.Fatalf("node.divisible = %t, want %t", got.divisible, tt.divisible)
+			}
+		})
+	}
+}
+
 func TestAmbiguousSudachiPOSUsesContext(t *testing.T) {
 	connectionParticle := testToken("て", "助詞", "接続助詞", "*", "て", "テ", false)
 	clauseParticle := testToken("から", "助詞", "接続助詞", "*", "から", "カラ", false)
@@ -154,6 +186,39 @@ func TestAmbiguousSudachiPOSUsesContext(t *testing.T) {
 }
 
 func TestSudachiContextProducesNaturalKuBoundaries(t *testing.T) {
+	t.Run("attach enumerative ya to the preceding noun", func(t *testing.T) {
+		tokens := []sudachiToken{
+			testToken("猫", "名詞", "普通名詞", "*", "猫", "ネコ", false),
+			testToken("や", "助詞", "副助詞", "*", "や", "ヤ", false),
+			testToken("犬", "名詞", "普通名詞", "*", "犬", "イヌ", false),
+		}
+
+		phrases := phrasesFromTokens(t, "猫や犬", tokens)
+		if got, want := phraseSurfaces(phrases), []string{"猫や", "犬。"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("phrases = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("allow kurai at the beginning of a later ku", func(t *testing.T) {
+		tokens := []sudachiToken{
+			testToken("その", "連体詞", "*", "*", "その", "ソノ", false),
+			testToken("痛み", "名詞", "普通名詞", "*", "痛み", "イタミ", false),
+			testToken("くらい", "助詞", "副助詞", "*", "くらい", "クライ", false),
+			testToken("は", "助詞", "係助詞", "*", "は", "ハ", false),
+			testToken("わかる", "動詞", "非自立可能", "五段-ラ行", "わかる", "ワカル", false),
+		}
+
+		phrases := phrasesFromTokens(t, "その痛みくらいはわかる", tokens)
+		first, _, remainder := findKu(phrases, 5)
+		if first != "その痛み" {
+			t.Fatalf("first ku = %q, want %q", first, "その痛み")
+		}
+		second, _, _ := findKu(remainder, 7)
+		if second != "くらいはわかる。" {
+			t.Fatalf("second ku = %q, want %q", second, "くらいはわかる。")
+		}
+	})
+
 	t.Run("do not split a compound verb before its auxiliary verb", func(t *testing.T) {
 		continuative := testToken("読み", "動詞", "一般", "五段-マ行", "読む", "ヨミ", false)
 		continuative.PartOfSpeech[5] = "連用形-一般"

@@ -3,9 +3,17 @@
 自分がフォローしているアカウントの投稿から短歌（五七五七七）になっている部分を見つけ出し、リプライでお知らせする Mastodon ボットです。[俳句検出bot](https://github.com/theoria24/FindHaiku4Mstdn)の亜流です。
 
 ## 依存ソフトウェア
-以下があらかじめインストールされていないと起動しません。
+以下があらかじめ利用可能でないと起動・動作しません。
 + MySQL
-+ [mecab](https://github.com/taku910/mecab)
++ Sudachi HTTP API（既定値 `http://localhost:8080`、分割モードB）
+
+Sudachi APIの接続先とタイムアウトは、`config.yml` の `SudachiAPIURL` と `SudachiAPITimeout` で変更できます。接続先にはベースURLを指定し、botが `/v1/analyze` を付加します。
+
+Sudachiの品詞階層は `sudachidict_full` v20260723 の全52種類を監査済みです。未監査の品詞階層が辞書更新やユーザー辞書によって返された場合は、誤判定を続けず解析エラーとして扱います。辞書更新後の実API互換性は次で確認できます。
+
+```bash
+TANKABOT_SUDACHI_API_URL=http://localhost:8080 go test -run TestLiveSudachiAPICompatibility
+```
 
 ## 機能
 + ホームタイムラインにいるアカウントの投稿を見守って短歌を検出する。

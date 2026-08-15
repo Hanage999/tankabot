@@ -9,7 +9,9 @@ DBCredentials:  # MySQLデータベース接続のための資格情報（環境
 YahooClientID: ***  # Yahoo!のYOLP Web APIを使うためのClient ID。https://e.developer.yahoo.co.jp/register から取得。
                     # LiveWithSun を true で使う場合に必要。
 
-NumConcurrentLangJobs: 4    # 言語解析ジョブの同時実行数の上限（多すぎるとメモリ使いすぎでアプリが落ちる。1〜10を指定可）
+NumConcurrentLangJobs: 4    # Sudachi APIへ同時に送る解析リクエスト数の上限（1〜10を指定可）
+SudachiAPIURL: http://localhost:8080  # Sudachi HTTP APIのベースURL（解析には /v1/analyze を使用）
+SudachiAPITimeout: 20s      # 同時実行枠の待機を含む、1回の解析のタイムアウト
 
 Persona:   # botのアカウント情報
     Name: mybot #任意。ログ出力に使われる。

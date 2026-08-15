@@ -2,8 +2,8 @@ package tankabot
 
 import (
 	"bytes"
-	"log"
-	"os/exec"
+	"context"
+	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -11,8 +11,8 @@ import (
 	"golang.org/x/net/html"
 )
 
-// mecabNode はMecabで分節されたノードとそのメタデータを含む構造体。
-type mecabNode struct {
+// analysisNode は形態素と短歌検出に必要なメタデータを含む構造体。
+type analysisNode struct {
 	surface      string
 	moraCount    int
 	dependent    bool // dependent はそのノードが付属語かどうか。
@@ -31,14 +31,17 @@ type phrase struct {
 }
 
 // extractTankas は文字列の中に短歌（五七五七七）が含まれていればそれを返す。
-func extractTankas(str string, jpl chan int) (tankas string) {
+func extractTankas(ctx context.Context, str string, analyzer *sudachiAnalyzer) (tankas string, err error) {
 	if str == "" || !isJap(str) {
-		return
+		return "", nil
 	}
 	//str = width.Fold.String(str)
 	str = strings.ReplaceAll(str, "\t", "")
 
-	phrases := segmentByPhrase(str, jpl)
+	phrases, err := segmentByPhrase(ctx, str, analyzer)
+	if err != nil {
+		return "", err
+	}
 
 	ts := make([]string, 0)
 	for i := range phrases {
@@ -57,7 +60,7 @@ func extractTankas(str string, jpl chan int) (tankas string) {
 	}
 	tankas = strings.Join(ts, "\n\n")
 
-	return
+	return tankas, nil
 }
 
 // detectTanka はフレーズスライスの冒頭が短歌になっていればそれを返す。
@@ -151,11 +154,14 @@ func findKu(phrases []phrase, mc int) (ku string, no bool, remainder []phrase) {
 }
 
 // segmentByPhrase は文字列を短歌の句として切れる単位に分割する。
-func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
-	nodes := parse(str, jpl)
+func segmentByPhrase(ctx context.Context, str string, analyzer *sudachiAnalyzer) (phrases []phrase, err error) {
+	nodes, err := parse(ctx, str, analyzer)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(nodes) < 2 {
-		return
+		return nil, nil
 	}
 
 	var p phrase
@@ -168,10 +174,7 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 				p.canStart = !n.dependent
 			}
 			prefixed = n.prefix
-			if !n.nounOrSymbol {
-				p.nounOrSymbol = false
-			}
-			p.nounOrSymbol = n.nounOrSymbol
+			p.nounOrSymbol = p.nounOrSymbol && n.nounOrSymbol
 			continue
 		}
 		phrases = append(phrases, p)
@@ -188,90 +191,142 @@ func segmentByPhrase(str string, jpl chan int) (phrases []phrase) {
 	}
 	phrases[0].sentenceTop = true
 
-	return
+	return phrases, nil
 }
 
-// parse は文字列をMecabで形態素解析し、ノードのスライスを返す。
-func parse(str string, jpl chan int) (nodes []mecabNode) {
-	cmd := exec.Command("mecab")
-	cmd.Stdin = strings.NewReader(str)
-	jpl <- 0
-	out, err := cmd.Output()
-	<-jpl
-	if err != nil {
-		log.Printf("info: 形態素解析器が正常に起動できませんでした：%s", err)
-		return
+// parse は文字列をSudachiで形態素解析し、短歌検出用ノードへ変換する。
+func parse(ctx context.Context, str string, analyzer *sudachiAnalyzer) ([]analysisNode, error) {
+	if analyzer == nil {
+		return nil, fmt.Errorf("形態素解析器が設定されていません")
 	}
+	tokens, err := analyzer.analyze(ctx, str)
+	if err != nil {
+		return nil, fmt.Errorf("Sudachiによる形態素解析に失敗しました: %w", err)
+	}
+	return nodesFromSudachi(str, tokens), nil
+}
 
-	nodeStrs := strings.Split(string(out), "\n")
-	nodes = make([]mecabNode, 0)
-	for _, s := range nodeStrs {
-		if s == "" || strings.HasPrefix(s, ",") {
+func nodesFromSudachi(text string, tokens []sudachiToken) (nodes []analysisNode) {
+	nodes = make([]analysisNode, 0, len(tokens)+1)
+	offset := 0
+	for i, token := range tokens {
+		if token.Surface == "" {
 			continue
 		}
 
-		s = strings.Replace(s, "\t", ",", 1)
-		props := strings.SplitN(s, ",", 10)
-		var node mecabNode
+		// Sudachi CLI's EOS markers are not part of the API response. Recover
+		// sentence boundaries between tokens from the original input.
+		if offset <= len(text) {
+			if relative := strings.Index(text[offset:], token.Surface); relative >= 0 {
+				gap := text[offset : offset+relative]
+				if strings.ContainsAny(gap, "\r\n") {
+					nodes = append(nodes, periodNode())
+				}
+				offset += relative + len(token.Surface)
+			}
+		}
+
+		var node analysisNode
 		switch {
-		case isWord(props):
-			node.surface = props[0]
-			node.moraCount = moraCount(props[8])
-			node.dependent = isDependent(props)
-			node.divisible = isDivisible(node.dependent, props)
-			node.prefix = isPrefix(props)
-			node.nounOrSymbol = isNoun(props)
-		case isKatakana(props):
-			node.surface = props[0]
-			node.moraCount = moraCount(props[0])
-			node.dependent = false
-			node.divisible = true
-		case isPeriod(props):
-			node.surface = "。"
-			node.moraCount = 0
-			node.dependent = true
-			node.divisible = false
-			node.nounOrSymbol = true
-		case isOpen(props):
+		case isPeriod(token):
+			node = periodNode()
+		case isOpen(token):
 			node.surface = "「"
 			node.moraCount = 0
 			node.dependent = false
 			node.divisible = true
 			node.prefix = true
 			node.nounOrSymbol = true
-		case isClose(props):
+		case isClose(token):
 			node.surface = "」"
 			node.moraCount = 0
 			node.dependent = true
 			node.divisible = false
 			node.nounOrSymbol = true
-		case isAnd(props):
-			node.surface = props[0]
+		case token.Surface == "&" || token.NormalizedForm == "&":
+			node.surface = token.Surface
 			node.moraCount = 3
 			node.dependent = true
 			node.divisible = false
 			node.nounOrSymbol = true
-		case isUnknown(props):
-			node.surface = props[0]
-			node.moraCount = 8
-			node.dependent = false
-			node.divisible = true
+		case isLexical(token):
+			node = nodeFromLexicalToken(token, previousSyntacticToken(tokens, i))
+			if node.surface == "" {
+				continue
+			}
 		default:
 			continue
 		}
 		nodes = append(nodes, node)
 	}
 
-	return
+	if offset < len(text) && strings.ContainsAny(text[offset:], "\r\n") {
+		nodes = append(nodes, periodNode())
+	}
+	// MeCab emitted EOS after every input. Preserve that sentence-end signal.
+	nodes = append(nodes, periodNode())
+	return nodes
 }
 
-func isWord(props []string) bool {
-	return len(props) == 10 && props[1] != "記号"
+func periodNode() analysisNode {
+	return analysisNode{surface: "。", dependent: true, divisible: false, nounOrSymbol: true}
 }
 
-func isKatakana(props []string) bool {
-	props[0] = strings.Replace(props[0], "・", "", -1)
-	for _, r := range props[0] {
+func nodeFromLexicalToken(token sudachiToken, previous *sudachiToken) analysisNode {
+	node := analysisNode{surface: token.Surface}
+	reading := token.ReadingForm
+	if reading == "" || reading == "*" {
+		katakana := strings.ReplaceAll(token.Surface, "・", "")
+		if isKatakana(katakana) {
+			node.surface = katakana
+			reading = katakana
+		} else if token.OOV {
+			// Match the old MeCab fallback for unknown non-katakana nouns.
+			node.moraCount = 8
+			node.divisible = true
+			return node
+		} else {
+			return analysisNode{}
+		}
+	}
+
+	node.moraCount = moraCount(reading)
+	if token.OOV {
+		// MeCab treated readable katakana OOVs as independent words.
+		node.divisible = true
+		return node
+	}
+	node.dependent = isDependent(token, previous)
+	node.divisible = isDivisible(node.dependent, token)
+	node.prefix = token.PartOfSpeech[0] == "接頭辞"
+	node.nounOrSymbol = isNoun(token)
+	return node
+}
+
+func isLexical(token sudachiToken) bool {
+	switch token.PartOfSpeech[0] {
+	case "代名詞", "副詞", "助動詞", "助詞", "動詞", "名詞", "形容詞", "形状詞",
+		"感動詞", "接尾辞", "接続詞", "接頭辞", "連体詞":
+		return true
+	default:
+		return false
+	}
+}
+
+func previousSyntacticToken(tokens []sudachiToken, current int) *sudachiToken {
+	for i := current - 1; i >= 0; i-- {
+		if tokens[i].PartOfSpeech[0] != "空白" {
+			return &tokens[i]
+		}
+	}
+	return nil
+}
+
+func isKatakana(word string) bool {
+	if word == "" {
+		return false
+	}
+	for _, r := range word {
 		if !unicode.In(r, unicode.Katakana) && string(r) != "ー" {
 			return false
 		}
@@ -279,40 +334,107 @@ func isKatakana(props []string) bool {
 	return true
 }
 
-func isDependent(props []string) bool {
-	return strings.Contains(props[1], "助") || props[2] == "非自立" || props[2] == "接尾" || props[5] == "サ変・スル" || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+func isDependent(token sudachiToken, previous *sudachiToken) bool {
+	pos := token.PartOfSpeech
+	return strings.Contains(pos[0], "助") ||
+		pos[0] == "接尾辞" ||
+		pos[1] == "助動詞語幹" ||
+		(pos[2] == "助数詞可能" && isNumeral(previous)) ||
+		(pos[1] == "非自立可能" && followsContinuative(previous)) ||
+		token.Surface == "もの" || token.Surface == "こと" ||
+		token.ReadingForm == "トキ" || token.ReadingForm == "トコロ" ||
+		isSahen(token) ||
+		(pos[0] == "動詞" && lemmaIs(token, "ある", "有る")) ||
+		(pos[0] == "形容詞" && lemmaIs(token, "ない", "無い")) ||
+		(pos[0] == "動詞" && lemmaIs(token, "なる", "成る"))
 }
 
-func isDivisible(dep bool, props []string) bool {
-	return !dep || props[0] == "もの" || props[0] == "こと" || props[2] == "副助詞" || props[0] == "日" || props[8] == "イイ" || props[8] == "ヨイ" || props[8] == "トキ" || props[8] == "トコロ" || (props[5] == "サ変・スル" && props[0] != "し") || (props[1] == "動詞" && props[7] == "ある") || (props[1] == "形容詞" && props[7] == "ない") || (props[1] == "動詞" && props[7] == "なる")
+func isNumeral(token *sudachiToken) bool {
+	return token != nil && token.PartOfSpeech[0] == "名詞" && token.PartOfSpeech[1] == "数詞"
 }
 
-func isPrefix(props []string) bool {
-	return props[1] == "接頭詞"
+func followsContinuative(token *sudachiToken) bool {
+	if token == nil {
+		return false
+	}
+	pos := token.PartOfSpeech
+	if pos[0] == "助詞" && pos[1] == "接続助詞" {
+		return token.DictionaryForm == "て" || token.DictionaryForm == "で"
+	}
+	if pos[0] != "動詞" && pos[0] != "形容詞" && pos[0] != "助動詞" {
+		return false
+	}
+	return strings.HasPrefix(pos[5], "連用形")
 }
 
-func isPeriod(props []string) bool {
-	return props[0] == "。" || props[0] == "?" || props[0] == "!" || props[0] == "EOS" || props[0] == ":" || props[0] == ";" || props[0] == "▼" || props[0] == "▲"
+func isDivisible(dependent bool, token sudachiToken) bool {
+	pos := token.PartOfSpeech
+	return !dependent || token.Surface == "もの" || token.Surface == "こと" ||
+		pos[1] == "副助詞" || token.Surface == "日" ||
+		token.ReadingForm == "イイ" || token.ReadingForm == "ヨイ" ||
+		token.ReadingForm == "トキ" || token.ReadingForm == "トコロ" ||
+		(isSahen(token) && token.Surface != "し") ||
+		(pos[0] == "動詞" && lemmaIs(token, "ある", "有る")) ||
+		(pos[0] == "形容詞" && lemmaIs(token, "ない", "無い")) ||
+		(pos[0] == "動詞" && lemmaIs(token, "なる", "成る"))
 }
 
-func isOpen(props []string) bool {
-	return props[2] == "括弧開" || props[0] == "(" || props[0] == "<" || props[0] == "{" || props[0] == "["
+func isSahen(token sudachiToken) bool {
+	conjugationType := token.PartOfSpeech[4]
+	return strings.Contains(conjugationType, "サ行変格") || strings.Contains(conjugationType, "サ変")
 }
 
-func isClose(props []string) bool {
-	return props[2] == "括弧閉" || props[0] == ")" || props[0] == ">" || props[0] == "}" || props[0] == "]"
+func lemmaIs(token sudachiToken, forms ...string) bool {
+	for _, form := range forms {
+		if token.DictionaryForm == form || token.NormalizedForm == form {
+			return true
+		}
+	}
+	return false
 }
 
-func isAnd(props []string) bool {
-	return props[0] == "&"
+func isPeriod(token sudachiToken) bool {
+	switch token.Surface {
+	case "。", "?", "!", "？", "！", ":", ";", "：", "；", "▼", "▲":
+		return true
+	default:
+		return false
+	}
 }
 
-func isUnknown(props []string) bool {
-	return len(props) == 8 && props[1] == "名詞"
+func isOpen(token sudachiToken) bool {
+	if len(token.PartOfSpeech) > 1 && token.PartOfSpeech[1] == "括弧開" {
+		return true
+	}
+	switch token.Surface {
+	case "(", "<", "{", "[", "（", "＜", "｛", "［":
+		return true
+	default:
+		return false
+	}
 }
 
-func isNoun(props []string) bool {
-	return props[1] == "名詞" || props[1] == "連体詞"
+func isClose(token sudachiToken) bool {
+	if len(token.PartOfSpeech) > 1 && token.PartOfSpeech[1] == "括弧閉" {
+		return true
+	}
+	switch token.Surface {
+	case ")", ">", "}", "]", "）", "＞", "｝", "］":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNoun(token sudachiToken) bool {
+	switch token.PartOfSpeech[0] {
+	case "名詞", "代名詞", "連体詞", "形状詞":
+		return true
+	case "接尾辞":
+		return token.PartOfSpeech[1] == "名詞的" || token.PartOfSpeech[1] == "形状詞的"
+	default:
+		return false
+	}
 }
 
 // moraCount は文字列が何拍で発音されるかを返す。

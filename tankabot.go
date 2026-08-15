@@ -3,7 +3,6 @@ package tankabot
 import (
 	"context"
 	"log"
-	"os/exec"
 	"strconv"
 	"time"
 
@@ -19,7 +18,7 @@ type commonSettings struct {
 	maxRetry      int
 	retryInterval time.Duration
 	yahooClientID string
-	langJobPool   chan int
+	langAnalyzer  *sudachiAnalyzer
 }
 
 // Initialize は、config.ymlに従ってbotとデータベース接続を初期化する。
@@ -42,15 +41,6 @@ func Initialize() (bot Persona, db DB, err error) {
 	}
 	colog.Register()
 
-	// 依存アプリの存在確認
-	for _, cmd := range []string{"mecab"} {
-		_, err := exec.LookPath(cmd)
-		if err != nil {
-			log.Printf("alert: %s がインストールされていません！", cmd)
-			return bot, db, err
-		}
-	}
-
 	var cr map[string]string
 
 	// bot設定ファイル読み込み
@@ -67,13 +57,25 @@ func Initialize() (bot Persona, db DB, err error) {
 	cmn.maxRetry = 5
 	cmn.retryInterval = time.Duration(5) * time.Second
 	cmn.yahooClientID = conf.GetString("OpenCageKey")
+	sudachiAPIURL := conf.GetString("SudachiAPIURL")
+	if sudachiAPIURL == "" {
+		sudachiAPIURL = defaultSudachiAPIURL
+	}
+	sudachiTimeout := conf.GetDuration("SudachiAPITimeout")
+	if sudachiTimeout <= 0 {
+		sudachiTimeout = 20 * time.Second
+	}
 	nOfJobs := conf.GetInt("NumConcurrentLangJobs")
 	if nOfJobs <= 0 {
 		nOfJobs = 1
 	} else if nOfJobs > 10 {
 		nOfJobs = 10
 	}
-	cmn.langJobPool = make(chan int, nOfJobs)
+	cmn.langAnalyzer, err = newSudachiAnalyzer(sudachiAPIURL, sudachiTimeout, nOfJobs)
+	if err != nil {
+		log.Printf("alert: Sudachi APIの設定が不正です：%s", err)
+		return bot, db, err
+	}
 	bot.commonSettings = &cmn
 	cr = conf.GetStringMapString("DBCredentials")
 

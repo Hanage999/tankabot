@@ -27,7 +27,7 @@ func (bot *Persona) randomToot(ctx context.Context, db DB) {
 				log.Printf("info :%s が古いトゥート候補の削除に失敗しました", bot.Name)
 				return
 			}
-			stock, err := db.stockItems(bot)
+			stock, err := db.stockItems(ctx, bot)
 			if err != nil {
 				log.Printf("info: %s がアイテムの収集に失敗しました", bot.Name)
 				return

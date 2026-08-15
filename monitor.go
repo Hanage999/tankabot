@@ -92,7 +92,11 @@ func (bot *Persona) respondToUpdate(ctx context.Context, ev *mastodon.UpdateEven
 
 	// 投稿から短歌を探す
 	text := textContent(orig.Content)
-	tankas := extractTankas(text, bot.langJobPool)
+	tankas, err := extractTankas(ctx, text, bot.langAnalyzer)
+	if err != nil {
+		log.Printf("info: 投稿の形態素解析に失敗しました：%s", err)
+		return err
+	}
 
 	if tankas != "" {
 		msg := "@" + orig.Account.Acct + " 短歌を発見しました！\n\n" + tankas

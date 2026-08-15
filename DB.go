@@ -1,6 +1,7 @@
 package tankabot
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"math/rand"
@@ -99,7 +100,7 @@ func (db DB) deleteOldCandidates(bot *Persona) (err error) {
 }
 
 // stockItemsは、新規RSSアイテムの中からbotが興味を持ったitemをストックする。
-func (db DB) stockItems(bot *Persona) (inStock int, err error) {
+func (db DB) stockItems(ctx context.Context, bot *Persona) (inStock int, err error) {
 	// botの情報を取得
 	var checkedUntil int
 	if err := db.QueryRow(`
@@ -158,7 +159,11 @@ func (db DB) stockItems(bot *Persona) (inStock int, err error) {
 	myItems := make([]Item, 0)
 	for _, item := range items {
 		str := item.Content
-		songs := extractTankas(str, bot.langJobPool)
+		songs, analysisErr := extractTankas(ctx, str, bot.langAnalyzer)
+		if analysisErr != nil {
+			log.Printf("info: item_id %d の形態素解析に失敗しました：%s", item.ID, analysisErr)
+			return 0, analysisErr
+		}
 		if songs == "" {
 			continue
 		}

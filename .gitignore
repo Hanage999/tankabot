@@ -3,6 +3,7 @@ cmd/**/*.txt
 cmd/**/*.json
 cmd/test
 cmd/tankabot/tankabot
+cmd/kugiri/kugiri
 cmd/tankabot/tankabotenv
 *.backup
 .DS_Store

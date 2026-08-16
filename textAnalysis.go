@@ -374,7 +374,6 @@ func followsContinuative(token *sudachiToken) bool {
 func isDivisible(dependent bool, token sudachiToken) bool {
 	pos := token.PartOfSpeech
 	return !dependent || token.Surface == "もの" || token.Surface == "こと" ||
-		token.Surface == "日" ||
 		token.ReadingForm == "イイ" || token.ReadingForm == "ヨイ" ||
 		token.ReadingForm == "トキ" || token.ReadingForm == "トコロ" ||
 		(isSahen(token) && token.Surface != "し") ||

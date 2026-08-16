@@ -88,7 +88,7 @@ func TestNodeFromSudachiTokenPreservesPhraseRules(t *testing.T) {
 	counter := testToken("日", "名詞", "普通名詞", "*", "日", "ニチ", false)
 	counter.PartOfSpeech[2] = "助数詞可能"
 	numeral := testToken("十五", "名詞", "数詞", "*", "十五", "ジュウゴ", false)
-	wantCounter := analysisNode{surface: "日", moraCount: 2, dependent: true, divisible: true, nounOrSymbol: true}
+	wantCounter := analysisNode{surface: "日", moraCount: 2, dependent: true, nounOrSymbol: true}
 	if got := nodeFromLexicalToken(counter, &numeral); !reflect.DeepEqual(got, wantCounter) {
 		t.Fatalf("counter node = %#v, want %#v", got, wantCounter)
 	}
@@ -334,6 +334,71 @@ func TestNodesFromSudachiRestoresNewlineAndEOS(t *testing.T) {
 			t.Errorf("nodes[%d].surface = %q, want %q", i, nodes[i].surface, want)
 		}
 	}
+}
+
+func TestNewlineTokenBecomesAPeriod(t *testing.T) {
+	// APIが改行を空白トークンとして返す場合も文の切れ目として扱う。
+	tokens := []sudachiToken{
+		testToken("あい", "名詞", "普通名詞", "*", "あい", "アイ", false),
+		testToken("\n", "空白", "*", "*", "\n", "", false),
+		testToken("うえ", "名詞", "普通名詞", "*", "うえ", "ウエ", false),
+	}
+	nodes := nodesFromSudachi("あい\nうえ", tokens)
+	want := []string{"あい", "。", "うえ", "。"}
+	if got := nodeSurfaces(nodes); !reflect.DeepEqual(got, want) {
+		t.Fatalf("surfaces = %q, want %q", got, want)
+	}
+}
+
+func TestPeriodIsDecidedByPartOfSpeech(t *testing.T) {
+	tests := []struct {
+		name  string
+		token sudachiToken
+		want  bool
+	}{
+		{"句点", testToken("。", "補助記号", "句点", "*", "。", "", false), true},
+		{"全角感嘆符", testToken("！", "補助記号", "句点", "*", "！", "", false), true},
+		{"半角疑問符", testToken("?", "補助記号", "句点", "*", "?", "", false), true},
+		{"全角コロン", testToken("：", "補助記号", "一般", "*", "：", "", false), false},
+		{"半角コロン", testToken(":", "補助記号", "一般", "*", ":", "", false), false},
+		{"全角セミコロン", testToken("；", "補助記号", "一般", "*", "；", "", false), false},
+		{"読点", testToken("、", "補助記号", "読点", "*", "、", "、", false), false},
+		{"ドメイン名のピリオド", testToken(".", "補助記号", "句点", "*", ".", "", false), false},
+		{"見出しの▼", testToken("▼", "補助記号", "一般", "*", "▼", "", false), true},
+		{"見出しの▲", testToken("▲", "補助記号", "一般", "*", "▲", "", false), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPeriod(tt.token); got != tt.want {
+				t.Fatalf("isPeriod(%q) = %t, want %t", tt.token.Surface, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestColonDoesNotBreakASentence(t *testing.T) {
+	// 「10：30」のコロンで文が切れると、その後ろが文頭扱いになってしまう。
+	tokens := []sudachiToken{
+		testToken("10", "名詞", "数詞", "*", "10", "ジュウ", false),
+		testToken("：", "補助記号", "一般", "*", "：", "", false),
+		testToken("30", "名詞", "数詞", "*", "30", "サンジュウ", false),
+		testToken("集合", "名詞", "普通名詞", "*", "集合", "シュウゴウ", false),
+	}
+	phrases := segmentNodesByPhrase(nodesFromSudachi("10：30集合", tokens))
+	for i, p := range phrases {
+		if i > 0 && p.sentenceTop {
+			t.Fatalf("phrases[%d] (%q) を文頭と判定した: %#v", i, p.surface, phrases)
+		}
+	}
+}
+
+func nodeSurfaces(nodes []analysisNode) []string {
+	surfaces := make([]string, len(nodes))
+	for i := range nodes {
+		surfaces[i] = nodes[i].surface
+	}
+	return surfaces
 }
 
 func TestExtractTankasWithSudachiResponse(t *testing.T) {

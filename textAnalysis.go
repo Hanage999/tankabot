@@ -234,6 +234,9 @@ func nodesFromSudachi(text string, tokens []sudachiToken) (nodes []analysisNode)
 		switch {
 		case isPeriod(token):
 			node = periodNode()
+		case strings.ContainsAny(token.Surface, "\r\n"):
+			// 改行がトークンとして返る場合も文の切れ目として扱う。
+			node = periodNode()
 		case isOpen(token):
 			node.surface = "「"
 			node.moraCount = 0
@@ -398,9 +401,20 @@ func lemmaIs(token sudachiToken, forms ...string) bool {
 	return false
 }
 
+// isPeriod は文の切れ目になる記号かどうかを判定する。句点かどうかは品詞で見る。
+// コロンやセミコロンはSudachiでは句点ではなく、URLや時刻の途中で文を切ってしまう
+// ので対象にしない。見出しに使われる▼▲だけは句点扱いの表層として補う。
 func isPeriod(token sudachiToken) bool {
+	// Sudachiはexample.comのようなドットも句点と判定するので、半角ピリオドは
+	// 除く。日本語の文末は。であり、半角ピリオドはURLやファイル名の一部が大半。
+	if token.Surface == "." {
+		return false
+	}
+	if len(token.PartOfSpeech) > 1 && token.PartOfSpeech[0] == "補助記号" && token.PartOfSpeech[1] == "句点" {
+		return true
+	}
 	switch token.Surface {
-	case "。", "?", "!", "？", "！", ":", ";", "：", "；", "▼", "▲":
+	case "▼", "▲":
 		return true
 	default:
 		return false

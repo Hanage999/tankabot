@@ -297,6 +297,12 @@ func nodeFromLexicalToken(token sudachiToken, previous *sudachiToken) analysisNo
 		}
 	}
 
+	if !isJap(reading) {
+		node.moraCount = 8
+		node.divisible = true
+		return node
+	}
+
 	node.moraCount = moraCount(reading)
 	if token.OOV {
 		// MeCab treated readable katakana OOVs as independent words.
@@ -383,7 +389,7 @@ func isDivisible(dependent bool, token sudachiToken) bool {
 		(pos[0] == "動詞" && lemmaIs(token, "ある", "有る")) ||
 		(pos[0] == "形容詞" && lemmaIs(token, "ない", "無い")) ||
 		(pos[0] == "動詞" && lemmaIs(token, "なる", "成る")) ||
-		(pos[1] == "副助詞" && !lemmaIs(token, "や", "か", "し", "ぞ", "って", "つ")) ||
+		(pos[1] == "副助詞" && !lemmaIs(token, "や", "か", "し", "ぞ", "って", "つ", "たり", "きり")) ||
 		(pos[1] == "係助詞" && !lemmaIs(token, "は", "も", "ぞ", "や"))
 }
 
@@ -448,6 +454,9 @@ func isClose(token sudachiToken) bool {
 func isNoun(token sudachiToken) bool {
 	switch token.PartOfSpeech[0] {
 	case "名詞", "代名詞", "連体詞", "形状詞":
+		if token.PartOfSpeech[1] == "数詞" {
+			return false
+		}
 		return true
 	case "接尾辞":
 		return token.PartOfSpeech[1] == "名詞的" || token.PartOfSpeech[1] == "形状詞的"

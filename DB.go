@@ -157,12 +157,14 @@ func (db DB) stockItems(ctx context.Context, bot *Persona) (inStock int, err err
 	tb := time.Now()
 
 	myItems := make([]Item, 0)
+	analysisFailed := false
 	for _, item := range items {
 		str := item.Content
 		songs, analysisErr := extractTankas(ctx, str, bot.langAnalyzer)
 		if analysisErr != nil {
-			log.Printf("info: item_id %d の形態素解析に失敗しました：%s", item.ID, analysisErr)
-			return 0, analysisErr
+			analysisFailed = true
+			log.Printf("info: item_id %d の形態素解析に失敗しました：%s。解析対象：%q", item.ID, analysisErr, textPreview(str, 300))
+			continue
 		}
 		if songs == "" {
 			continue
@@ -203,17 +205,21 @@ func (db DB) stockItems(ctx context.Context, bot *Persona) (inStock int, err err
 	if len(items) == 0 {
 		return
 	}
-	_, err = db.Exec(`
-		UPDATE bots
-		SET checked_until = ?, updated_at = ?
-		WHERE id = ?`,
-		items[0].ID,
-		time.Now(),
-		bot.DBID,
-	)
-	if err != nil {
-		log.Printf("info: %s のchecked_untilが更新できませんでした：%s", bot.Name, err)
-		return
+	if analysisFailed {
+		log.Printf("info: %s の形態素解析に失敗があったためchecked_untilを更新せず、次回再試行します", bot.Name)
+	} else {
+		_, err = db.Exec(`
+			UPDATE bots
+			SET checked_until = ?, updated_at = ?
+			WHERE id = ?`,
+			items[0].ID,
+			time.Now(),
+			bot.DBID,
+		)
+		if err != nil {
+			log.Printf("info: %s のchecked_untilが更新できませんでした：%s", bot.Name, err)
+			return
+		}
 	}
 
 	// candidatesの数を取得
@@ -233,6 +239,15 @@ func (db DB) stockItems(ctx context.Context, bot *Persona) (inStock int, err err
 	}
 
 	return
+}
+
+func textPreview(text string, maxRunes int) string {
+	text = strings.Join(strings.Fields(text), " ")
+	runes := []rune(text)
+	if maxRunes <= 0 || len(runes) <= maxRunes {
+		return text
+	}
+	return string(runes[:maxRunes]) + "…"
 }
 
 // pickItemは、candidateから一件のitemをランダムで選択する。

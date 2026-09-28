@@ -513,3 +513,36 @@ func TestPhraseNounFlagRequiresEveryNodeToBeNominal(t *testing.T) {
 		t.Fatal("phrase containing a verb was marked noun-only")
 	}
 }
+
+func TestTextPreview(t *testing.T) {
+	if got := textPreview("見出し\n  本文\t続き", 6); got != "見出し 本文…" {
+		t.Errorf("textPreview() = %q", got)
+	}
+}
+
+func TestRemoveCombiningMarks(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		// Sudachi 0.8.2 で解析に失敗した記事（item_id 7902998, 7903321）の一部。
+		{"異体字セレクタ", "編集⚫\ufe0eASCII ❤\ufe0fThanks", "編集⚫ASCII ❤Thanks"},
+		{"NFKCで結合文字に分解される全角マクロン", "じゃない＜ ￣Y^Y^", "じゃない＜ Y^Y^"},
+		{"スペーシングアクセント", "あ´A あ˜A あ¸A", "あA あA あA"},
+		{"結合アクセント", "cafe\u0301です", "cafeです"},
+		{"肌色修飾子", "いいね👍\U0001F3FBOK", "いいね👍OK"},
+		// 合成済みの文字や、0.8.2で問題の出ない文字はそのまま残す。
+		{"合成済みのアクセント付き文字", "caféです", "caféです"},
+		{"漢字の異体字（IVS）", "葛\U000E0100城", "葛\U000E0100城"},
+		{"濁点・半濁点", "あ゛A あ゜A", "あ゛A あ゜A"},
+		{"ZWJ", "家族👨\u200d👩です", "家族👨\u200d👩です"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := removeCombiningMarks(tt.in); got != tt.want {
+				t.Errorf("removeCombiningMarks(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
